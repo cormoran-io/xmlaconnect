@@ -30,8 +30,8 @@ using namespace ATL;
 class pass_prompt_ui :  public CDialogImpl<pass_prompt_ui>
 {
 public:
-	TCHAR* m_user;
-	TCHAR* m_pass;
+	TCHAR m_user[256];
+	TCHAR m_pass[256];
 public:
 	pass_prompt_ui(){}
 

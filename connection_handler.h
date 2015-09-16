@@ -33,13 +33,13 @@
 
 
 #include "query_translator.h"
-
+#include "mondrian_session_table.h"
 
 #include <cctype>
 
 
 #include "config_data.h"
-#include "dimension_properties.h"
+#include "pass_prompt.h"
 
 class connection_handler
 {
@@ -48,7 +48,7 @@ public:
 	class tabular_data_access
 	{
 	private:
-		connection_handler& m_handler;
+		connection_handler& m_connection_handler;
 		int m_col_count;
 		ATLCOLUMNINFO* m_columns;
 
@@ -105,39 +105,39 @@ public:
 
 		const char* tabular_header( const int idx )
 		{
-			if ( 0 == m_handler.m_e_response.cxmla__return__.root.__size ) { return ""; }//preffer empty to null
-			if ( idx >= m_handler.m_e_response.cxmla__return__.root.row[0].__size ){ return ""; }//preffer empty to null
-			return m_handler.m_e_response.cxmla__return__.root.row[0].__array[idx].elementName;
+			if ( 0 == m_connection_handler.m_e_response.cxmla__return__.root.__size ) { return ""; }//preffer empty to null
+			if ( idx >= m_connection_handler.m_e_response.cxmla__return__.root.row[0].__size ){ return ""; }//preffer empty to null
+			return m_connection_handler.m_e_response.cxmla__return__.root.row[0].__array[idx].elementName;
 		}
 		const DBTYPEENUM tabular_header_type( const int idx )
 		{
 			//the first row contains headers and counts. does not have typeinfo on the tags.
-			if ( 2 > m_handler.m_e_response.cxmla__return__.root.__size ) { return DBTYPE_WSTR; }//unknown is string
-			if ( idx >= m_handler.m_e_response.cxmla__return__.root.row[1].__size ){ return DBTYPE_WSTR; }//unknown is string
-			if ( nullptr == (m_handler.m_e_response.cxmla__return__.root.row[1].__array[idx].__xsi__type ) ) { return DBTYPE_WSTR; }//unknown is string
-			const std::string type(m_handler.m_e_response.cxmla__return__.root.row[1].__array[idx].__xsi__type);
+			if ( 2 > m_connection_handler.m_e_response.cxmla__return__.root.__size ) { return DBTYPE_WSTR; }//unknown is string
+			if ( idx >= m_connection_handler.m_e_response.cxmla__return__.root.row[1].__size ){ return DBTYPE_WSTR; }//unknown is string
+			if ( nullptr == (m_connection_handler.m_e_response.cxmla__return__.root.row[1].__array[idx].__xsi__type ) ) { return DBTYPE_WSTR; }//unknown is string
+			const std::string type(m_connection_handler.m_e_response.cxmla__return__.root.row[1].__array[idx].__xsi__type);
 			if ( type == "xsd:double" ) { return DBTYPE_R8; }
 			if ( type == "xsd:int" ) { return DBTYPE_I4; }
 			return DBTYPE_WSTR;
 		}
 	public:
 		tabular_data_access( connection_handler& handler ) 
-			: m_handler( handler )
+			: m_connection_handler( handler )
 			, m_columns( nullptr )
 		{
-			if ( 0 == m_handler.m_e_response.cxmla__return__.root.__size ) 
+			if ( 0 == m_connection_handler.m_e_response.cxmla__return__.root.__size ) 
 			{
 				m_col_count = 0;
 				return;
 			}
 
-			if ( nullptr == m_handler.m_e_response.cxmla__return__.root.row )
+			if ( nullptr == m_connection_handler.m_e_response.cxmla__return__.root.row )
 			{
 				m_col_count = 0;
 				return;
 			}
 
-			m_col_count = m_handler.m_e_response.cxmla__return__.root.row[0].__size;
+			m_col_count = m_connection_handler.m_e_response.cxmla__return__.root.row[0].__size;
 			make_col_info();
 		}
 
@@ -155,35 +155,35 @@ public:
 		void load_at( int idx, wchar_t* data )
 		{
 			if ( 0 > idx ) { return; }
-			if ( idx >= m_handler.m_e_response.cxmla__return__.root.__size ){ return; }
+			if ( idx >= m_connection_handler.m_e_response.cxmla__return__.root.__size ){ return; }
 
 			for( int i = 0; i < m_col_count; ++i )
 			{
 				switch ( m_columns[i].wType )
 				{
 				case DBTYPE_WSTR:
-					wcscpy_s( ( wchar_t*) ((char*)data + m_columns[i].cbOffset), WORD_WIDTH, CA2W(m_handler.m_e_response.cxmla__return__.root.row[idx].__array[i].value, CP_UTF8) );
+					wcscpy_s( ( wchar_t*) ((char*)data + m_columns[i].cbOffset), WORD_WIDTH, CA2W(m_connection_handler.m_e_response.cxmla__return__.root.row[idx].__array[i].value, CP_UTF8) );
 					break;
 				case DBTYPE_R8:
 					{
-						double val = atof( m_handler.m_e_response.cxmla__return__.root.row[idx].__array[i].value );
+						double val = atof( m_connection_handler.m_e_response.cxmla__return__.root.row[idx].__array[i].value );
 						CopyMemory( (char*)data + m_columns[i].cbOffset, &val, sizeof( val ) );
 					}
 					break;
 				case DBTYPE_I4:
 					{
-						int val = atoi( m_handler.m_e_response.cxmla__return__.root.row[idx].__array[i].value );
+						int val = atoi( m_connection_handler.m_e_response.cxmla__return__.root.row[idx].__array[i].value );
 						CopyMemory( (char*)data + m_columns[i].cbOffset, &val, sizeof( val ) );
 					}
 					break;
 				}
 			}
 
-			//return m_handler.m_e_response.cxmla__return__.root.row[0].__array[idx].elementName;
+			//return m_connection_handler.m_e_response.cxmla__return__.root.row[0].__array[idx].elementName;
 		}
 
 		const int col_count() const { return m_col_count; }
-		const int row_count() const { return m_handler.m_e_response.cxmla__return__.root.__size; }
+		const int row_count() const { return m_connection_handler.m_e_response.cxmla__return__.root.__size; }
 		const int data_size() const { return m_col_count * WORD_WIDTH * sizeof(wchar_t); }
 	};
 public:
@@ -193,10 +193,9 @@ public:
 		out_of_bound() : std::runtime_error("index out of bounds"){}
 	};
 private:
-	int m_session_id;
+	std::string			m_session_id;
 	cxmla__DiscoverResponse m_d_response;
 	cxmla__ExecuteResponse m_e_response;
-	session* m_session;
 	XMLAConnectionProxy m_proxy;
 	std::string m_location;
 	std::string m_user;
@@ -210,10 +209,13 @@ private:
 	size_t m_cell_ordinal_pos;
 	size_t m_execute_col_count;
 	std::vector< std::pair< std::string, int > > m_indirection;//0 will be value, all user props will substract 1
+public:
+	session::session_data	m_sesion_data;
+	mondrian_session_table	m_session_vars;
 private:
 
-	typedef std::unordered_map< soap*, session* > indirection_table_type;
-	static indirection_table_type& soap_2_session()
+	typedef std::unordered_map< soap*, connection_handler* > indirection_table_type;
+	static indirection_table_type& soap_2_connection()
 	{
 		static indirection_table_type result;
 		return result;
@@ -224,104 +226,16 @@ private:
 	{
 		if ( !soap_tag_cmp(key, "Server") )
 		{
-			::session* match = soap_2_session()[soap];
+			connection_handler* match = soap_2_connection()[soap];
 			if ( nullptr != match ) 
 			{
-				session::session_table()[ match ].register_server( val );
+				match->m_sesion_data.register_server( val );
 			}
 		}
 		return fparsehdr( soap, key, val );
 	}
 
-	HRESULT get_connection_data()
-	{
-		HRESULT					hr;
-		IGetDataSource*			pDataSource = NULL;
-		IDBProperties*			pProperties = NULL;
-		IMalloc*				pIMalloc = NULL;
-
-		ULONG propCount;
-		DBPROPSET* props;
-
-		if FAILED( hr = CoGetMalloc( 1, &pIMalloc ) ) {
-			return hr;
-		}
-
-		if FAILED( hr = m_session->QueryInterface(__uuidof(IGetDataSource),(void**)&pDataSource) ) {
-			pIMalloc->Release();
-			return hr;
-		}
-
-		if FAILED( hr = pDataSource->GetDataSource( __uuidof(IDBProperties), ( IUnknown** ) &pProperties ) )
-		{
-			pIMalloc->Release();
-			pDataSource->Release();
-			return hr;
-		}
-
-		//Session catalog has lower precendence than db catalog
-		ISessionProperties* pISessionProperties = NULL;
-		if SUCCEEDED( m_session->QueryInterface(__uuidof(ISessionProperties),(void**)&pISessionProperties) ) {
-			pISessionProperties->GetProperties( 0, NULL, &propCount, &props );
-
-			for ( ULONG i = 0; i < propCount; i++ )
-			{
-				for ( ULONG j =0; j < props[i].cProperties; j++ )
-				{
-					if ( IsEqualGUID( props[i].guidPropertySet, DBPROPSET_SESSION ) ) {
-						if ( DBPROP_CURRENTCATALOG == props[i].rgProperties[j].dwPropertyID ) {
-							std::string buf = CT2A(props[i].rgProperties[j].vValue.bstrVal, CP_UTF8);
-							if ( !buf.empty() )  {
-								std::swap( m_catalog, buf );
-							}
-						}
-					}
-					VariantClear( &(props[i].rgProperties[j].vValue) );
-				}
-				pIMalloc->Free( props[i].rgProperties );
-			}
-			pIMalloc->Free( props );
-
-			pISessionProperties->Release();
-		}
-
-
-		pProperties->GetProperties( 0, NULL, &propCount, &props );
-
-		for ( ULONG i = 0; i < propCount; i++ )
-		{
-			for ( ULONG j =0; j < props[i].cProperties; j++ )
-			{
-				if ( IsEqualGUID( props[i].guidPropertySet,DBPROPSET_DBINIT ) )
-				{
-					switch ( props[i].rgProperties[j].dwPropertyID )
-					{
-					case DBPROP_INIT_LOCATION:
-						m_location = CT2A(props[i].rgProperties[j].vValue.bstrVal, CP_UTF8);
-						break;
-					case DBPROP_AUTH_USERID:
-						m_user = CT2A(props[i].rgProperties[j].vValue.bstrVal, CP_UTF8);
-						break;
-					case DBPROP_AUTH_PASSWORD:
-						m_pass = CT2A(props[i].rgProperties[j].vValue.bstrVal, CP_UTF8);
-						break;
-					case DBPROP_INIT_CATALOG:
-						if ( props[i].rgProperties[j].vValue.bstrVal )  m_catalog = CT2A(props[i].rgProperties[j].vValue.bstrVal, CP_UTF8);
-						break;
-					}
-				}
-				VariantClear( &(props[i].rgProperties[j].vValue) );
-			}
-			pIMalloc->Free( props[i].rgProperties );
-		}
-		pIMalloc->Free( props );
-
-		pIMalloc->Release();
-		pProperties->Release();
-		pDataSource->Release();
-		return S_OK;
-	}
-
+	
 	void load_restrictions( ULONG cRestrictions, const VARIANT* rgRestrictions, xmlns__Restrictions& where, bool add_cat = true )
 	{
 		//TODO: validate memory consumption due to the strdup here
@@ -453,13 +367,11 @@ private:
 
 	void session()
 	{
-		char sessid[20];
-		_itoa_s( m_session_id, sessid, 20, 10 );
 		m_proxy.header = new SOAP_ENV__Header();
 		m_proxy.header->Session = new SessionType();
 		m_proxy.header->Session->element = NULL;
 		m_proxy.header->Session->xmlns = NULL;
-		m_proxy.header->Session->SessionId = _strdup( sessid );
+		m_proxy.header->Session->SessionId = _strdup( m_session_id.c_str() );
 		m_proxy.header->EndSession = NULL;
 		m_proxy.header->BeginSession = NULL;
 	}
@@ -574,43 +486,24 @@ private:
 		}
 		m_execute_col_count = crt;
 	}
-public:
-	connection_handler( IUnknown* aSession ) 
-		: m_session( nullptr )
-		, m_tab_data_access( nullptr )
+
+	void prompt_initialize( HWND parent_window_handle )
 	{
-		IGetSelf* pGetSelf;
-		aSession->QueryInterface( __uuidof( IGetSelf ) , ( void** ) &pGetSelf );
-		pGetSelf->GetSelf( (void**)&m_session );
-		pGetSelf->Release();
+		pass_prompt_ui login_prompt;
+		_tcscpy_s( login_prompt.m_user, 256, CA2T( m_user.c_str(), CP_UTF8) );
+		_tcscpy_s( login_prompt.m_pass, 256, CA2T( m_pass.c_str(), CP_UTF8) );
 
-		m_session_id = session::session_table()[ m_session ].id;
-
-		get_connection_data();
-
-		m_proxy.header = NULL;
-
-		if ( nullptr == fparsehdr ) 
-		{
-			fparsehdr = m_proxy.fparsehdr;
+		if ( IDOK == login_prompt.DoModal( parent_window_handle ) ) {
+			m_user.assign(CT2A( login_prompt.m_user, CP_UTF8 ));
+			m_pass.assign(CT2A( login_prompt.m_pass, CP_UTF8 ));
 		}
-		m_proxy.fparsehdr = http_post_parse_header;
-		
-		config_data::ssl_init( &m_proxy );
-		
-		config_data::get_proxy( m_location.c_str(), m_proxy.proxy_host, m_proxy.proxy_port );
-
-		soap_2_session()[ &m_proxy ] = m_session;
-		m_execute_colls = nullptr;
 	}
-
+public:
 	connection_handler( const std::string& location, const std::string& user, const std::string& pass, const std::string& catalog )
-		: m_session( nullptr )
-		, m_location(location)
+		: m_location(location)
 		, m_user(user)
 		, m_pass(pass)
 		, m_catalog( catalog )
-		, m_session_id( -1 )
 		, m_tab_data_access( nullptr )
 	{
 		if ( nullptr == fparsehdr ) 
@@ -624,41 +517,79 @@ public:
 		config_data::get_proxy( m_location.c_str(), m_proxy.proxy_host, m_proxy.proxy_port );
 
 		m_execute_colls = nullptr;
+
+		m_proxy.soap_endpoint = m_location.c_str();
+		soap_omode(&m_proxy, SOAP_XML_DEFAULTNS | SOAP_C_UTFSTRING | SOAP_IO_KEEPALIVE | SOAP_IO_CHUNK );
+		soap_imode(&m_proxy, SOAP_C_UTFSTRING | SOAP_IO_KEEPALIVE | SOAP_IO_CHUNK );
+
+		soap_2_connection()[&m_proxy] = this;
+
+		if ( m_pass.empty() )
+		{
+			config_data::cred_iterator match = config_data::m_credentials.find( m_location+m_catalog );
+			if ( config_data::m_credentials.end() != match )  {
+				m_user = match->second.first;
+				m_pass = match->second.second;			
+			}
+		}
 	}
 
 	virtual ~connection_handler()
 	{
-		soap_2_session().erase( &m_proxy );
+		soap_2_connection().erase( &m_proxy );
 		if ( nullptr != m_tab_data_access ) { delete m_tab_data_access; }
 		safe_delete_column_headers();
 	}
 
-	void loadCubeDimProps( cxmla__DiscoverResponse&  aresponse ){
-		xmlns__rows& rows = m_d_response.cxmla__return__.root.__rows;
-		for( int i = 0; i < rows.__size; ++i ) {
-			dim_properties::instance().addProperty( m_catalog, rows.row[i].CUBE_USCORENAME, rows.row[i].PROPERTY_USCORENAME, rows.row[i].HIERARCHY_USCOREUNIQUE_USCORENAME, rows.row[i].LEVEL_USCOREUNIQUE_USCORENAME ); 
-			std::string alias = std::string(rows.row[i].HIERARCHY_USCOREUNIQUE_USCORENAME)+".["+rows.row[i].PROPERTY_USCORENAME+"]";
-			std::string substr = std::string(rows.row[i].LEVEL_USCOREUNIQUE_USCORENAME)+".["+rows.row[i].PROPERTY_USCORENAME+"]";
-			query_translator::translator().load_alias( alias, substr, session::session_table()[ m_session ].server);
-		}
-	}
-
-	void loasAlias() {
-
-	}
-
-	int discover( char* endpoint, ULONG cRestrictions, const VARIANT* rgRestrictions)
+	const bool should_fix_aliases() const 
 	{
-		m_proxy.soap_endpoint = m_location.c_str();
+		return m_sesion_data.server == session::session_data::MONDRIAN;
+	}
 
-		soap_omode(&m_proxy, SOAP_XML_DEFAULTNS | SOAP_C_UTFSTRING);
-		soap_imode(&m_proxy, SOAP_C_UTFSTRING);
-		
-		if ( -1 == m_session_id ) {
+	const std::string& user() const { return m_user; }
+	const std::string& pass() const { return m_pass; }
+
+	bool check_login( HWND parent_window_handle )
+	{
+		for (  int i = 0; i < 3; ++i ){		
+			if ( S_OK != execute("") && !valid_credentials() ) {
+				prompt_initialize( parent_window_handle );//has side effect. changes m_user and m_pass;
+			} else {
+				config_data::m_credentials[m_location+m_catalog] = config_data::key_val_type(m_user, m_pass);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool get_session_member( ULONG cRestrictions, const VARIANT* rgRestrictions, member_row& a_row )
+	{
+		return m_session_vars.get_session_member( cRestrictions, rgRestrictions, a_row );
+	}
+
+	std::vector< std::pair< std::string, std::string > > get_session_measures()
+	{
+		return m_session_vars.get_session_measures();
+	}
+
+	std::vector< set_row > get_session_sets( ULONG cRestrictions, const VARIANT* rgRestrictions )
+	{
+		return m_session_vars.get_session_sets( cRestrictions, rgRestrictions );
+	}
+
+	cxmla__DiscoverResponse& raw_discover( char* endpoint, xmlns__Restrictions& restrictions, xmlns__Properties& properties )
+	{
+		m_proxy.Discover( endpoint, restrictions, properties, m_d_response );
+		return m_d_response;
+	}
+
+	int discover( char* endpoint, ULONG cRestrictions, const VARIANT* rgRestrictions, bool skip_seesion = false)
+	{
+		if ( m_session_id.empty() && !skip_seesion ) {
 			begin_session();
 			m_proxy.userid = m_user.c_str();
 			m_proxy.passwd = m_pass.c_str();
-		} else {
+		} else if ( !skip_seesion ) {
 			//palo requires credentials inside the session
 			m_proxy.userid = m_user.c_str();
 			m_proxy.passwd = m_pass.c_str();
@@ -669,28 +600,92 @@ public:
 		xmlns__Restrictions restrictions;
 		load_restrictions( cRestrictions, rgRestrictions, restrictions, strcmp("DISCOVER_LITERALS", endpoint) != 0 && strcmp("MDSCHEMA_FUNCTIONS", endpoint) != 0 );
 
-
-		if ( ("MDSCHEMA_PROPERTIES" == endpoint) &&  ("MDSCHEMA_PROPERTIES" == endpoint) && (strcmp("1", restrictions.RestrictionList.PROPERTY_USCORETYPE) == 0) ) {
-			loadProperties = true;
-			if ( NULL != restrictions.RestrictionList.LEVEL_USCOREUNIQUE_USCORENAME ) {
-				delete restrictions.RestrictionList.LEVEL_USCOREUNIQUE_USCORENAME;
-				restrictions.RestrictionList.LEVEL_USCOREUNIQUE_USCORENAME = NULL;
-			}
-		}
-
 		xmlns__Properties props;
 		props.PropertyList.Catalog = const_cast<char*>(m_catalog.c_str());//make Palo happy	
 		props.PropertyList.LocaleIdentifier = CP_UTF8;
 		int result = m_proxy.Discover( endpoint, restrictions, props, m_d_response );
 
-		if ( 0 == result && loadProperties ) {
-			loadCubeDimProps( m_d_response );
-		}
 
-		if ( NULL != m_session && NULL != m_proxy.header && NULL != m_proxy.header->Session && NULL != m_proxy.header->Session->SessionId ) {
-			session::session_table()[ m_session ].id = atoi( m_proxy.header->Session->SessionId );
+		if ( NULL != m_proxy.header && NULL != m_proxy.header->Session && NULL != m_proxy.header->Session->SessionId ) {
+			m_session_id =  m_proxy.header->Session->SessionId;
 		}
 		unload_restrictions( restrictions );
+		return result;
+	}
+
+	int execute ( char* statement )
+	{
+		bool tabular_result = false;	
+
+		if ( m_session_id.empty() ) {
+			begin_session();
+			m_proxy.userid = m_user.c_str();
+			m_proxy.passwd = m_pass.c_str();
+		} else {
+			//palo requires credentials inside the session
+			m_proxy.userid = m_user.c_str();
+			m_proxy.passwd = m_pass.c_str();
+			session();
+		}	
+
+		xmlns__Command command;
+
+		std::string translation( statement );
+		
+		if ( m_sesion_data.mondrian() )
+		{
+			if ( m_session_vars.try_register_session_member( translation, *this ) ){
+				translation.clear(); 
+			} else {
+				m_session_vars.transform( translation );
+			}
+		}
+
+		query_translator::translator().translate( translation, m_sesion_data.server );
+
+		statement = const_cast<char*>( translation.c_str() );
+
+		command.Statement = statement;
+		xmlns__Properties Properties;
+		Properties.PropertyList.LocaleIdentifier = CP_UTF8;
+		Properties.PropertyList.Content = "Data";
+		Properties.PropertyList.AxisFormat = "TupleFormat";
+		
+		std::string drill_through_test(statement, statement+strlen("DRILLTHROUGH")); 
+		std::transform( drill_through_test.begin(), drill_through_test.end(), drill_through_test.begin(), std::toupper );
+		
+		if ( nullptr != m_tab_data_access  )
+		{
+			delete m_tab_data_access;
+			m_tab_data_access = nullptr;
+		}
+		if ( drill_through_test == "DRILLTHROUGH" )
+		{
+			tabular_result = true;			
+			Properties.PropertyList.Format = "Tabular";
+		} else
+		{
+			Properties.PropertyList.Format = "Multidimensional";
+		}
+
+		Properties.PropertyList.Catalog = const_cast<char*>(m_catalog.c_str());
+		//clear cell data
+		m_cell_data.clear();
+		int result = m_proxy.Execute( NULL, command, Properties, m_e_response );
+		//add cell data
+		get_cell_data( m_e_response );
+		if ( NULL != m_proxy.header && NULL != m_proxy.header->Session && NULL != m_proxy.header->Session->SessionId ) {
+			m_session_id = m_proxy.header->Session->SessionId;
+		}
+
+		if ( tabular_result )
+		{
+			m_tab_data_access = new tabular_data_access( *this );
+		}
+		
+
+		form_column_headers();
+
 		return result;
 	}
 
@@ -714,78 +709,6 @@ public:
 		}
 	}
 
-	int execute ( char* statement )
-	{
-		bool tabular_result = false;
-		m_proxy.soap_endpoint = m_location.c_str();
-		soap_omode(&m_proxy, SOAP_XML_DEFAULTNS | SOAP_C_UTFSTRING);
-		soap_imode(&m_proxy, SOAP_C_UTFSTRING);
-		
-		//soap_omode(&m_proxy,SOAP_XML_INDENT);
-		if ( -1 == m_session_id ) {
-			begin_session();
-			m_proxy.userid = m_user.c_str();
-			m_proxy.passwd = m_pass.c_str();
-		} else {
-			//palo requires credentials inside the session
-			m_proxy.userid = m_user.c_str();
-			m_proxy.passwd = m_pass.c_str();
-			session();
-		}	
-
-		xmlns__Command command;
-
-		std::string translation( statement );
-		if ( nullptr !=  m_session )
-		{
-			query_translator::translator().translate( translation, session::session_table()[ m_session ].server );
-		}
-		statement = const_cast<char*>( translation.c_str() );
-
-		command.Statement = statement;
-		xmlns__Properties Properties;
-		Properties.PropertyList.LocaleIdentifier = CP_UTF8;
-		Properties.PropertyList.Content = "Data";
-		Properties.PropertyList.AxisFormat = "TupleFormat";
-		
-		std::string drill_through_test(statement, statement+strlen("DRILLTHROUGH")); 
-		std::transform( drill_through_test.begin(), drill_through_test.end(), drill_through_test.begin(), std::toupper );		
-		
-		if ( nullptr != m_tab_data_access  )
-		{
-			delete m_tab_data_access;
-			m_tab_data_access = nullptr;
-		}
-		if ( drill_through_test == "DRILLTHROUGH" )
-		{
-			tabular_result = true;			
-			Properties.PropertyList.Format = "Tabular";
-		} else
-		{
-			Properties.PropertyList.Format = "Multidimensional";
-		}
-
-		Properties.PropertyList.Catalog = const_cast<char*>(m_catalog.c_str());
-		//clear cell data
-		m_cell_data.clear();
-		int result = m_proxy.Execute( NULL, command, Properties, m_e_response );
-		//add cell data
-		get_cell_data( m_e_response );
-		if ( NULL != m_session && NULL != m_proxy.header && NULL != m_proxy.header->Session && NULL != m_proxy.header->Session->SessionId ) {
-			session::session_table()[ m_session ].id = atoi( m_proxy.header->Session->SessionId );
-		}
-
-		if ( tabular_result )
-		{
-			m_tab_data_access = new tabular_data_access( *this );
-		}
-		
-
-		form_column_headers();
-
-		return result;
-	}
-
 	const bool has_tabular_data() const 
 	{ 
 		return nullptr != m_tab_data_access; 
@@ -798,9 +721,17 @@ public:
 
 	bool no_session() 
 	{
-		bool result = m_proxy.fault && 0 == strcmp(m_proxy.fault->faultstring,"Invalid Session id");
+		bool result = false;
+		if ( m_proxy.fault ) {
+			 result = (0 == strcmp(m_proxy.fault->faultstring,"Invalid Session id"));
+			 if ( !result ) {
+				  char * pch;
+				  pch = strstr(m_proxy.fault->faultstring, " unknown XMLA session");
+				  result = ( nullptr != pch );
+			 }
+		}
 		if ( result ) {
-			m_session_id = -1;
+			m_session_id.clear();
 		}
 		return result;
 	}
@@ -833,8 +764,17 @@ public:
 	const bool valid_credentials()
 	{
 		if  ( NULL == m_proxy.fault ) { return true; }
-		if  ( 401 ==  m_proxy.error ) { return false; }
-		return ( NULL == strstr( m_proxy.fault->faultstring, "ORA-01005" )  && NULL == strstr( m_proxy.fault->faultstring, "ORA-01017" ) );
+		if  ( 401 ==  m_proxy.error ) 
+		{
+			m_session_id.clear();
+			return false; 
+		}
+		const bool is_valid =  ( NULL == strstr( m_proxy.fault->faultstring, "ORA-01005" )  && NULL == strstr( m_proxy.fault->faultstring, "ORA-01017" ) );
+		if ( !is_valid )
+		{
+			m_session_id.clear();
+		}
+		return is_valid;
 	}
 
 	ATL::ATLCOLUMNINFO* column_info( DBORDINAL* pcInfo )
@@ -1049,6 +989,7 @@ public:
 					++col_count;
 				}
 				col_count += hInfo.__userProp.__size;
+
 				axisInfo[idx].rgcColumns[j] = col_count;
 				axisInfo[idx].rgpwszDimensionNames[j] =  _wcsdup( CA2W( m_e_response.cxmla__return__.root.OlapInfo->AxesInfo.AxisInfo[idx].HierarchyInfo[j].name, CP_UTF8 ) );
 			}

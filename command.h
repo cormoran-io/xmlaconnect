@@ -53,11 +53,10 @@ BEGIN_COM_MAP(command)
 	COM_INTERFACE_ENTRY(ISupportErrorInfo)
 END_COM_MAP()
 private:
-	std::unique_ptr< connection_handler > mConnectionHandler;
+	connection_handler* m_connection_handler;
 public:
 	HRESULT FinalConstruct()
 	{
-		mConnectionHandler.reset( NULL );
 		HRESULT hr = CConvertHelper::FinalConstruct();
 		if (FAILED (hr))
 			return hr;

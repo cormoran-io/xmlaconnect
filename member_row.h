@@ -70,6 +70,20 @@ public:
 	unsigned long   m_parent_count;
 	wchar_t*         m_description;
 
+	member_row()
+		: m_catalog( nullptr)
+		, m_schema( nullptr )
+		, m_cube( nullptr )
+		, m_dimension_unique_name( nullptr )
+		, m_hierarchy_unique_name( nullptr )
+		, m_level_unique_name( nullptr )
+		, m_member_name( nullptr )
+		, m_member_unique_name( nullptr )
+		, m_member_caption( nullptr )
+		, m_parent_unique_name( nullptr )
+		, m_description( nullptr )
+	{
+	}
 
 	member_row( row& a_row )
 	{
@@ -118,9 +132,6 @@ public:
 		delete[] m_parent_unique_name;
 		delete[] m_description;
 	}
-
-	
-	EMPTY_CONSTRUCTOR(member_row);
 
 	static char* schema_name() { return "MDSCHEMA_MEMBERS"; }
 

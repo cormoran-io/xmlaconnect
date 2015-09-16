@@ -137,6 +137,8 @@ public:
 			import_certificates( connection->ctx, TEXT("ROOT") );
 		}
 	}
+
+	static bool visual_totals() { return m_visual_totals; }
 private:
 	void load_registry_values()
 	{
@@ -151,21 +153,40 @@ private:
 			{
 				DWORD skip = 0;
 				RegSetValueEx( key, TEXT("SOAP_SSL_SKIP_HOST_CHECK"), 0, REG_DWORD, (const BYTE*) &skip, sizeof(skip) );
+				skip = 1;
+				RegSetValueEx( key, TEXT("VISUAL_TOTALS"), 0, REG_DWORD, (const BYTE*) &skip, sizeof(skip) );
+				m_visual_totals = true;
 				m_skip_ssl_host_check = true;
-				m_location.clear();
+				m_location.clear(); 
 				CloseHandle( key );
 			}
 		} else if ( ERROR_SUCCESS == open_stat )
 		{
 			DWORD	len = STR_LEN;
 			TCHAR	location[STR_LEN];
-			DWORD	skip_host_check = 0;
+			DWORD	skip_host_check = 0; 
+			DWORD	visual_totals = 0;
 			ZeroMemory( location, STR_LEN * sizeof( TCHAR ) );
 			RegGetValue( key, nullptr, TEXT("location"), RRF_RT_REG_SZ, nullptr, location, &len );
 			m_location = location;
 			len = sizeof(skip_host_check);
 			RegGetValue( key, nullptr, TEXT("SOAP_SSL_SKIP_HOST_CHECK"), RRF_RT_REG_DWORD, nullptr, &skip_host_check, &len );
 			m_skip_ssl_host_check = skip_host_check != 0;
+			len = sizeof(visual_totals);
+			LSTATUS vt_stat = RegGetValue( key, nullptr, TEXT("VISUAL_TOTALS"), RRF_RT_REG_DWORD, nullptr, &visual_totals, &len );
+			if ( ERROR_FILE_NOT_FOUND == vt_stat )
+			{
+				HKEY key_write;
+				visual_totals = 1;
+				len = sizeof(visual_totals);
+				open_stat = RegOpenKeyEx( HKEY_CURRENT_USER, TEXT( ARQUERY_KEY_PATH ), 0,  KEY_WRITE, &key_write );
+				if ( ERROR_SUCCESS == open_stat ) 
+				{
+					vt_stat = RegSetValueEx( key_write, TEXT("VISUAL_TOTALS"), 0, REG_DWORD, (const BYTE*) &visual_totals, len );
+					CloseHandle( key_write );
+				}
+			}
+			m_visual_totals = visual_totals != 0;
 			ZeroMemory(location, STR_LEN);
 			len = STR_LEN;
 			if ( ERROR_SUCCESS == RegGetValue( key, nullptr, TEXT("AUTHORITATIVE_PROXY"), RRF_RT_REG_SZ, nullptr, location, &len ) )
@@ -467,6 +488,7 @@ CLEANUP:
 	}
 private:
 	static bool m_skip_ssl_host_check;
+	static bool m_visual_totals;
 	static std::wstring m_location;
 
 	//proxy conf

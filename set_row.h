@@ -74,6 +74,19 @@ public:
 		m_display_folder = _wcsdup( FROM_STRING( a_row.SET_USCOREDISPLAY_USCOREFOLDER, CP_UTF8 ) );
 	}
 
+	set_row()
+		: m_catalog( nullptr )
+		, m_schema( nullptr )
+		, m_cube( nullptr )
+		, m_set_name( nullptr )
+		, m_expression( nullptr )
+		, m_description( nullptr )
+		, m_dimension( nullptr )
+		, m_set_caption( nullptr )
+		, m_display_folder( nullptr )
+	{
+	}
+
 	set_row( const set_row& other )
 	{
 		copy( other );
@@ -96,7 +109,6 @@ public:
 		delete[] m_description;
 	}
 
-	EMPTY_CONSTRUCTOR(set_row);
 	static char* schema_name() { return "MDSCHEMA_SETS"; }
 
 	BEGIN_PROVIDER_COLUMN_MAP( set_row )

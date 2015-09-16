@@ -42,10 +42,19 @@ private:
 		};
 		typedef std::unordered_map< std::string, std::string > alias_map_type;
 
-		caps_type		caps;
-		alias_map_type	alias_map;
-		alias_map_type	dim_props_map;
-		alias_map_type	regex_map;
+		struct delimited_alias 
+		{
+			std::string		m_from;
+			std::string		m_to;
+			std::string		m_key;
+			std::string		m_val;
+		};
+		typedef std::vector<delimited_alias>		delimited_alias_type;
+
+		caps_type					caps;
+		alias_map_type				alias_map;
+		alias_map_type				regex_map;
+		delimited_alias_type		d_alias;
 
 		server_specifics() : caps(CAPS_ANY) {}
 
@@ -54,7 +63,6 @@ private:
 			if ( this == &other ) { return; }
 			caps = other.caps;
 			alias_map = other.alias_map;
-			dim_props_map = other.dim_props_map;
 			regex_map = other.regex_map;
 		}
 
@@ -103,7 +111,6 @@ private:
 				
 			}
 
-			if ( alias_map.empty() && dim_props_map.empty()) { return what; }
 			for ( alias_map_type::const_iterator i = alias_map.begin(), e = alias_map.end(); i != e; ++i )
 			{
 				size_t start_pos = 0;
@@ -112,20 +119,29 @@ private:
 					start_pos += i->second.length(); // ...
 				}
 			}
-			//just for properties
-			for ( alias_map_type::const_iterator i = dim_props_map.begin(), e = dim_props_map.end(); i != e; ++i )
-			{
-				size_t start_pos = 0;
-				while((start_pos = what.find(i->first, start_pos)) != std::string::npos) {
-					what.replace(start_pos, i->first.length(), i->second);
-					start_pos += i->second.length(); // ...
-				}
-			}
-
+			
 			if ( substitutions.empty() ) { return what; }
 			for ( substitution_vector::const_iterator i = substitutions.begin(), e = substitutions.end(); i != e; ++i )
 			{
 				while ( i->evaluate_once( what ) ){}
+			}
+
+			//delimited aliases
+			for( delimited_alias_type::const_iterator i = d_alias.begin(), e = d_alias.end(); i != e; ++i ) 
+			{
+				size_t start_pos = what.find(i->m_from);
+				size_t key_pos = what.find(i->m_key, start_pos );
+				size_t end_pos = what.find(i->m_to, start_pos);
+				while ( std::string::npos != key_pos && std::string::npos != start_pos && std::string::npos != end_pos && key_pos < end_pos && key_pos > start_pos ) {
+					while ( key_pos < end_pos ) {
+						what.replace(key_pos, i->m_key.length(), i->m_val );
+						key_pos = what.find(i->m_key, key_pos + i->m_val.size() + 1 );
+					}
+					start_pos = what.find(i->m_from, start_pos+1 );
+					key_pos = what.find(i->m_key, start_pos );
+					end_pos = what.find(i->m_to, start_pos+1);
+				}
+
 			}
 			return what;
 		}
@@ -158,6 +174,9 @@ private:
 					} else if ("REGEX" == key ) 
 					{
 						load_regex( val ); 
+					} else if ("DELIMITED_ALIAS" == key )
+					{
+						load_delimited_alias( val );
 					}
 				}
 			}
@@ -192,6 +211,24 @@ private:
 			alias_map[ key ] = subst;
 		}
 
+		void load_delimited_alias( const std::string& val ) 
+		{
+			delimited_alias alias;
+			
+			std::string::size_type pos =  val.find(",");
+			if ( std::string::npos == pos ) { return; }
+			alias.m_from = val.substr( 0, pos);
+			std::string::size_type pos_next_token =  val.find(",", pos+1);
+			if ( std::string::npos == pos_next_token ) { return; }
+			alias.m_to = val.substr( pos+1, pos_next_token - pos -1 );
+			pos = val.find("=");
+			if ( std::string::npos == pos ) { return; }
+			alias.m_key = val.substr( pos_next_token + 1, pos - pos_next_token -1 );
+			alias.m_val = val.substr( pos + 1, val.size() - pos -1 );
+
+			d_alias.push_back( alias );
+		}
+
 
 		void load_caps( std::string& val )
 		{
@@ -204,19 +241,6 @@ private:
 				caps = CAPS_LOWER;
 			}
 		}
-	public:
-		void load_prop_alias( std::string& key, std::string& subst ) 
-		{
-			dim_props_map[ key ] = subst;
-		}
-
-		void remove_prop_alias( std::vector<std::string>& aliases )
-		{
-			for(std::vector<std::string>::iterator i = aliases.begin(), e = aliases.end(); i != e; ++i) {
-				dim_props_map.erase( *i );
-			}
-		}
-
 	private:
 		struct substitution
 		{
@@ -396,18 +420,6 @@ public:
 	{
 		const server_specifics& translator = get( server );
 		return translator.translate( src );
-	}
-	
-	void load_alias( std::string& key, std::string& subst, session::session_data::server_type server ) 
-	{
-		const server_specifics& translator = get( server );
-		(const_cast<server_specifics&>(translator)).load_prop_alias( key, subst);
-	}
-
-	void clear_alias( session::session_data::server_type server )
-	{
-		const server_specifics& translator = get( server );
-		//(const_cast<server_specifics&>(translator))
 	}
 
 	void setKey( std::string& key ) {

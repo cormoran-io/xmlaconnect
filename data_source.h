@@ -65,10 +65,13 @@ public:
 
 	HRESULT FinalConstruct()
 	{
+		m_subqueries_checked = false;
+
 		m_literals_loaded = false;
 		m_pass[0] = 0;
 		m_user[0] = 0;
 		config_data cfg;
+		m_connection_handler.reset( nullptr );
 		return FInit();
 	}
 	
@@ -84,34 +87,34 @@ public:
 		return IDBCreateSessionImpl<data_source, session>::CreateSession(pUnkOuter, riid, ppDBSession);
 	}
 
-
-	STDMETHODIMP GetProperties (
-	   ULONG               cPropertyIDSets,
-	   const DBPROPIDSET   rgPropertyIDSets[],
-	   ULONG              *pcPropertySets,
-	   DBPROPSET         **prgPropertySets)
-	{
-		return IDBPropertiesImpl<data_source>::GetProperties( cPropertyIDSets, rgPropertyIDSets, pcPropertySets, prgPropertySets);
-	}
-
-	STDMETHODIMP GetPropertyInfo(
-	   ULONG               cPropertyIDSets,
-	   const DBPROPIDSET   rgPropertyIDSets[],
-	   ULONG              *pcPropertyInfoSets,
-	   DBPROPINFOSET     **prgPropertyInfoSets,
-	   OLECHAR           **ppDescBuffer)
-	{
-		return IDBPropertiesImpl<data_source>::GetPropertyInfo( cPropertyIDSets, rgPropertyIDSets, pcPropertyInfoSets, prgPropertyInfoSets, ppDescBuffer);
-	}
+	//IDBPropertiesImpl specializations
 
 	STDMETHODIMP SetProperties (
-	   ULONG       cPropertySets,
-	   DBPROPSET   rgPropertySets[])
+		ULONG       cPropertySets,
+		DBPROPSET   rgPropertySets[])
 	{
+		for ( ULONG i = 0; i < cPropertySets; ++i )
+		{
+			if ( IsEqualGUID( rgPropertySets[i].guidPropertySet,DBPROPSET_DBINIT ) )
+			{
+				for ( ULONG j = 0; j < rgPropertySets[i].cProperties; ++j )
+				{
+					if ( DBPROP_INIT_LOCATION == rgPropertySets[i].rgProperties[j].dwPropertyID )
+					{
+						if ( rgPropertySets[i].rgProperties[j].vValue.bstrVal )  
+						{ 
+							location = CT2A( rgPropertySets[i].rgProperties[j].vValue.bstrVal, CP_UTF8); 
+							if ( !location.empty() )
+							{
+								check_subqueries();
+							}
+						}
+					}
+				}
+			}
+		}
 		return IDBPropertiesImpl<data_source>::SetProperties( cPropertySets, rgPropertySets );
-	}
-	
-	//IDBPropertiesImpl specializations
+	}	
 
 	HRESULT OnPropertyChanged( ULONG  iCurSet , DBPROP* pDBProp )
 	{
@@ -129,12 +132,13 @@ public:
 				
 				pDBProp->dwPropertyID = DBPROP_CURRENTCATALOG;
 
-				for ( session::session_table_type::const_iterator i = session::session_table().begin(), e = session::session_table().end(); i != e; ++i )
+				for ( session::session_table_type::iterator i = session::session_table().begin(), e = session::session_table().end(); i != e; ++i )
 				{
-					i->first->QueryInterface( __uuidof( ISessionProperties ), (void**)&pProps );
+					(*i)->QueryInterface( __uuidof( ISessionProperties ), (void**)&pProps );
 					pProps->SetProperties( 1, propSets );
 					pProps->Release();
 				}				
+
 			}
 			break;
 		default:
@@ -143,13 +147,57 @@ public:
 		return IDBPropertiesImpl<data_source>::OnPropertyChanged( iCurSet, pDBProp );
 	}
 
-private:
+	void check_subqueries()
+	{
+		connection_handler	handler ( location, "", "", catalog );
 
+		handler.discover( "DISCOVER_PROPERTIES", 0, nullptr, true );
+
+		thread_has_subqueries = false;
+
+		for ( int i = 0, e = handler.discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) 
+		{
+			row& crt = handler.discover_response().cxmla__return__.root.__rows.row[i];
+			if ( crt.PropertyName )
+			{
+				if ( std::string("MdpropMdxSubqueries") == crt.PropertyName	)
+				{
+					if ( crt.Value )
+					{
+						int val = atoi( crt.Value );
+						thread_has_subqueries = val == 3;
+					}
+				}
+			}
+		}
+	}
+private:
 	HWND m_parent_window_handle;
 	TCHAR m_user[256];
 	TCHAR m_pass[256];
-
+	std::string location;
+	std::string catalog;
+	std::unique_ptr< connection_handler > m_connection_handler;
 private:
+	HRESULT check_connection_handler()
+	{
+		if ( nullptr != m_connection_handler )
+		{
+			return S_OK;
+		}
+
+		m_connection_handler.reset( new  connection_handler( location, std::string(CT2A( m_user, CP_UTF8 )), std::string(CT2A( m_pass, CP_UTF8 )), catalog ) );
+		if ( m_connection_handler->check_login( m_parent_window_handle ) )
+		{
+			_tcscpy_s( m_user, 256, CA2T(m_connection_handler->user().c_str(), CP_UTF8) );
+			_tcscpy_s( m_pass, 256, CA2T(m_connection_handler->pass().c_str(), CP_UTF8) );
+			WriteCrtUserPass();
+		} else
+		{
+			return E_FAIL;
+		}
+		return S_OK;
+	}
 
 	HRESULT DataLinkInitialize(void)
 	{
@@ -197,19 +245,6 @@ CLEANUP:
 		return hr;
 	}
 
-	HRESULT PromptInitialize(void)
-	{
-		pass_prompt_ui login_prompt;
-		login_prompt.m_user = m_user;
-		login_prompt.m_pass = m_pass;
-		if ( IDOK == login_prompt.DoModal( m_parent_window_handle ) ) {
-			_tcscpy_s( m_user, 256, login_prompt.m_user );
-			_tcscpy_s( m_pass, 256, login_prompt.m_pass );	
-		}
-
-		return S_OK;
-	}
-
 	HRESULT WriteCrtUserPass()
 	{
 		DBPROPSET   propset;
@@ -229,7 +264,7 @@ CLEANUP:
 		return SetProperties( 1, &propset );
 	}
 
-	void read_props( std::string& location, std::string& catalog, ULONG propCount, DBPROPSET* pProperties )
+	void parse_props( ULONG propCount, DBPROPSET* pProperties )
 	{
 		for ( ULONG i = 0; i < propCount; i++ )
 		{
@@ -241,10 +276,10 @@ CLEANUP:
 					switch ( crtProp.dwPropertyID )
 					{
 					case DBPROP_INIT_LOCATION:
-						location = CT2A(crtProp.vValue.bstrVal, CP_UTF8);
+						if ( crtProp.vValue.bstrVal )  { location = CT2A(crtProp.vValue.bstrVal, CP_UTF8); }
 						break;
 					case DBPROP_INIT_CATALOG:
-						if ( crtProp.vValue.bstrVal )  catalog = CT2A(crtProp.vValue.bstrVal, CP_UTF8);
+						if ( crtProp.vValue.bstrVal )  { catalog = CT2A(crtProp.vValue.bstrVal, CP_UTF8); }
 						break;
 					case DBPROP_AUTH_USERID:
 						_tcscpy_s( m_user, 256, crtProp.vValue.bstrVal );
@@ -268,6 +303,7 @@ CLEANUP:
 			}
 		}
 	}
+	
 public:
 
 	//IDBInitializeImpl specializations
@@ -277,50 +313,22 @@ public:
 		ULONG					propCount;
 		DBPROPSET*				pProperties;
 		unsigned char			assets = 0;
-		std::string				location;
-		std::string				catalog;
+
 		
 		if ( FAILED( hr = GetProperties( 0, NULL, &propCount, &pProperties ) ) ) { return hr; }
 
-		read_props( location, catalog, propCount, pProperties );
+		parse_props( propCount, pProperties );
 
 		if ( location.empty() || catalog.empty() )
 		{
-			if FAILED( hr = DataLinkInitialize() ) 
-			{ 
-				return hr; 
-			}
-			else
-			{
-				read_props( location, catalog, propCount, pProperties );
-			}
-		} 
-		
-		
-		for (  int i = 0; i < 3; ++i ){
-			if ( 0 == m_pass[0] ) 
-			{
-				config_data::cred_iterator match = config_data::m_credentials.find( location+catalog );
-				if ( config_data::m_credentials.end() != match )  {
-					_tcscpy_s( m_user, 256, CA2T(match->second.first.c_str(), CP_UTF8) );
-					_tcscpy_s( m_pass, 256, CA2T(match->second.second.c_str(), CP_UTF8) );					
-				}
-			}
-			connection_handler handler( location, std::string(CT2A( m_user, CP_UTF8 )), std::string(CT2A( m_pass, CP_UTF8 )), catalog );
-			if ( S_OK != handler.execute("") && !handler.valid_credentials() ) {
-				PromptInitialize();
-			} else {
-				WriteCrtUserPass();
-				config_data::m_credentials[location+catalog] = config_data::key_val_type(CT2A( m_user, CP_UTF8 ),CT2A( m_pass, CP_UTF8 ));
-				break;
-			}
+			if FAILED( hr = DataLinkInitialize() ) {  return hr;  } 
+			else { parse_props( propCount, pProperties ); }
 		}
 
 		return IDBInitializeImpl<data_source>::Initialize();
 	}
 
 	//IDBInfo
-
 private:
 	struct literal_entry
 	{
@@ -379,28 +387,20 @@ private:
 	HRESULT load_literals()
 	{
 		HRESULT						hr;
-		ULONG						propCount;
-		DBPROPSET*					pProperties;
-		std::string					location;
-		std::string					catalog;
 
 		if ( m_literals_loaded ) { return S_OK; }
 
-		if FAILED( hr = GetProperties( 0, NULL, &propCount, &pProperties ) ) { return hr; }
-
-		read_props( location, catalog, propCount, pProperties );
-
-		connection_handler handler( location, std::string(CT2A( m_user, CP_UTF8 )), std::string(CT2A( m_pass, CP_UTF8 )), catalog );
-		hr = handler.discover( "DISCOVER_LITERALS", 0, nullptr );
+		check_connection_handler();
+		hr = m_connection_handler->discover( "DISCOVER_LITERALS", 0, nullptr );
 
 		if ( S_OK != hr ) {
-			make_error( FROM_STRING( handler.fault_string(), CP_UTF8 ) );
+			make_error( FROM_STRING( m_connection_handler->fault_string(), CP_UTF8 ) );
 			hr = E_FAIL;
 		}
 
-		for ( int i = 0, e = handler.discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) 
+		for ( int i = 0, e = m_connection_handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) 
 		{
-			row& crt = handler.discover_response().cxmla__return__.root.__rows.row[i];
+			row& crt = m_connection_handler->discover_response().cxmla__return__.root.__rows.row[i];
 			if ( crt.LiteralName ){
 				m_literals.push_back( literal_entry( crt.LiteralName, crt.LiteralValue ? crt.LiteralValue : "", crt.LiteralInvalidChars ? crt.LiteralInvalidChars : "", crt.LiteralInvalidStartingChars ? crt.LiteralInvalidStartingChars : "", crt.LiteralMaxLength ) );
 			} else {
@@ -412,34 +412,27 @@ private:
 		return S_OK;
 	}
 public:
-
-
 	STDMETHODIMP GetKeywords( LPOLESTR *ppwszKeywords)
 	{
 		HRESULT						hr = S_OK;
 		IMalloc*					allocator;
-		ULONG						propCount;
-		DBPROPSET*					pProperties;
-		std::string					location;
-		std::string					catalog;
 		std::vector<std::string>	keywords;
 		char*						base_keywords = SQL_ODBC_KEYWORDS;
 		
-		if FAILED( hr = GetProperties( 0, NULL, &propCount, &pProperties ) ) { return hr; }
 
 		if FAILED( hr =  CoGetMalloc( 1, &allocator ) ) { return hr; }
 
-		read_props( location, catalog, propCount, pProperties );
 
-		connection_handler handler( location, std::string(CT2A( m_user, CP_UTF8 )), std::string(CT2A( m_pass, CP_UTF8 )), catalog );
-		hr = handler.discover( "DISCOVER_KEYWORDS", 0, nullptr );
+		check_connection_handler();
+
+		hr = m_connection_handler->discover( "DISCOVER_KEYWORDS", 0, nullptr );
 
 		if ( S_OK != hr ) {
-			make_error( FROM_STRING( handler.fault_string(), CP_UTF8 ) );
+			make_error( FROM_STRING( m_connection_handler->fault_string(), CP_UTF8 ) );
 			hr = E_FAIL;
 		} else {
-			for ( int i = 0, e = handler.discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {
-				const char* crt = handler.discover_response().cxmla__return__.root.__rows.row[i].Keyword;
+			for ( int i = 0, e = m_connection_handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {
+				const char* crt = m_connection_handler->discover_response().cxmla__return__.root.__rows.row[i].Keyword;
 				if ( nullptr == crt ) { continue; }
 				const char* match = strstr( base_keywords, crt );
 				if ( nullptr != match && ','==match[strlen(match)] ) { continue; }
@@ -605,6 +598,9 @@ public:
 		return S_OK;
 	}
 
+	static __declspec( thread ) bool thread_has_subqueries;	
+	bool m_subqueries_checked;
+
 DECLARE_REGISTRY_RESOURCEID(IDR_XMLADATA)
 BEGIN_COM_MAP(data_source)
 	COM_INTERFACE_ENTRY(IDBCreateSession)
@@ -623,8 +619,10 @@ BEGIN_PROP_MAP(data_source)
     PROP_PAGE(CLSID_XMLAAdvancedDlg)
 END_PROP_MAP()
 
+
 BEGIN_PROPSET_MAP(data_source)
-	BEGIN_PROPERTY_SET(DBPROPSET_DATASOURCEINFO)
+//if more differences in properties from server to server are to follow we must implement our own IDBProperties
+	BEGIN_PROPERTY_SET_COND(thread_has_subqueries, DBPROPSET_DATASOURCEINFO)
 		PROPERTY_INFO_ENTRY( ACTIVESESSIONS )
 		PROPERTY_INFO_ENTRY( DATASOURCEREADONLY )
 		PROPERTY_INFO_ENTRY( BYREFACCESSORS )
@@ -643,7 +641,8 @@ BEGIN_PROPSET_MAP(data_source)
 		MDPROPERTY_INFO_ENTRY( MDX_SET_FUNCTIONS )
 		MDPROPERTY_INFO_ENTRY_VALUE( AXES, 7 )
 		MDPROPERTY_INFO_ENTRY_VALUE( MDX_OBJQUALIFICATION, MDPROPVAL_MOQ_DIMHIER_LEVEL | MDPROP_NAMED_LEVELS | MDPROPVAL_MOQ_DIMHIER_MEMBER )
-//		MDPROPERTY_INFO_ENTRY_VALUE( MDX_SUBQUERIES, 0x03)
+		MDPROPERTY_INFO_ENTRY_VALUE( MDX_SUBQUERIES, 0x03)
+		MDPROPERTY_INFO_ENTRY_VALUE( VISUALMODE, MDPROPVAL_VISUAL_MODE_VISUAL_OFF )
 		PROPERTY_INFO_ENTRY( DBMSVER )
 		PROPERTY_INFO_ENTRY_EX( DATASOURCE_TYPE, VT_I4, DBPROPFLAGS_DATASOURCEINFO | DBPROPFLAGS_READ, DBPROPVAL_DST_MDP, 0 )
 		PROPERTY_INFO_ENTRY( ROWSET_ASYNCH )
@@ -654,8 +653,37 @@ BEGIN_PROPSET_MAP(data_source)
 		PROPERTY_INFO_ENTRY_VALUE( PROVIDERVER, TEXT("01.00.0000") )
 		PROPERTY_INFO_ENTRY_VALUE( DBMSVER, TEXT("01.00.0000") )
 
-	END_PROPERTY_SET(DBPROPSET_DATASOURCEINFO)
-	
+	ELSE_PROPERTY_SET_COND(DBPROPSET_DATASOURCEINFO)
+		PROPERTY_INFO_ENTRY( ACTIVESESSIONS )
+		PROPERTY_INFO_ENTRY( DATASOURCEREADONLY )
+		PROPERTY_INFO_ENTRY( BYREFACCESSORS )
+		PROPERTY_INFO_ENTRY( OUTPUTPARAMETERAVAILABILITY )
+		PROPERTY_INFO_ENTRY( PROVIDEROLEDBVER )
+		PROPERTY_INFO_ENTRY_VALUE( DSOTHREADMODEL, DBPROPVAL_RT_APTMTTHREAD )
+		PROPERTY_INFO_ENTRY( SUPPORTEDTXNISOLEVELS )
+		PROPERTY_INFO_ENTRY( USERNAME )
+
+		PROPERTY_INFO_ENTRY_VALUE( CONNECTIONSTATUS, DBPROPVAL_CS_INITIALIZED )
+
+//OLAP
+		MDPROPERTY_INFO_ENTRY_VALUE( MDX_FORMULAS, MDPROPVAL_MF_SCOPE_SESSION | MDPROPVAL_MF_SCOPE_GLOBAL  | MDPROPVAL_MF_CREATE_CALCMEMBERS | MDPROPVAL_MF_CREATE_NAMEDSETS | MDPROPVAL_MF_WITH_CALCMEMBERS | MDPROPVAL_MF_WITH_NAMEDSETS )
+		MDPROPERTY_INFO_ENTRY_VALUE( FLATTENING_SUPPORT, MDPROPVAL_FS_FULL_SUPPORT )
+		MDPROPERTY_INFO_ENTRY_VALUE( NAMED_LEVELS, MDPROPVAL_NL_NAMEDLEVELS )
+		MDPROPERTY_INFO_ENTRY( MDX_SET_FUNCTIONS )
+		MDPROPERTY_INFO_ENTRY_VALUE( AXES, 7 )
+		MDPROPERTY_INFO_ENTRY_VALUE( MDX_OBJQUALIFICATION, MDPROPVAL_MOQ_DIMHIER_LEVEL | MDPROP_NAMED_LEVELS | MDPROPVAL_MOQ_DIMHIER_MEMBER )
+		PROPERTY_INFO_ENTRY( DBMSVER )
+		PROPERTY_INFO_ENTRY_EX( DATASOURCE_TYPE, VT_I4, DBPROPFLAGS_DATASOURCEINFO | DBPROPFLAGS_READ, DBPROPVAL_DST_MDP, 0 )
+		PROPERTY_INFO_ENTRY( ROWSET_ASYNCH )
+
+//Identification
+		PROPERTY_INFO_ENTRY_VALUE( PROVIDERNAME, TEXT("XMLAProvider.dll") )
+		PROPERTY_INFO_ENTRY_VALUE( PROVIDERFRIENDLYNAME, TEXT("XMLA Data Source") )
+		PROPERTY_INFO_ENTRY_VALUE( PROVIDERVER, TEXT("01.00.0000") )
+		PROPERTY_INFO_ENTRY_VALUE( DBMSVER, TEXT("01.00.0000") )
+
+	END_PROPERTY_SET_COND(DBPROPSET_DATASOURCEINFO)
+
 	BEGIN_PROPERTY_SET(DBPROPSET_MDX_EXTENSIONS)
 		PROPERTY_INFO_ENTRY_VALUE( MSMD_MDX_CALCMEMB_EXTENSIONS, DBPROPVAL_MDX_CALCMEMB_ADD )
 	END_PROPERTY_SET(DBPROPSET_MDX_EXTENSIONS)

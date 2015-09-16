@@ -70,7 +70,7 @@ LRESULT prop_conn_dlg::OnBnClickedButton1(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 
 	xmlns__Restrictions restrictions;
 
-	restrictions.RestrictionList.CATALOG_USCORENAME = (char*)db.c_str();
+	//restrictions.RestrictionList.CATALOG_USCORENAME = (char*)db.c_str();
 
 	proxy.header = new SOAP_ENV__Header();
 	proxy.header->BeginSession = new BSessionType();
@@ -84,7 +84,7 @@ LRESULT prop_conn_dlg::OnBnClickedButton1(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 
 	xmlns__Properties props;
 	props.PropertyList.LocaleIdentifier = CP_UTF8;
-
+	props.PropertyList.Catalog = (char*)db.c_str();
 	config_data::ssl_init( &proxy );
 
 	config_data::get_proxy( CW2A( loc, CP_UTF8), proxy.proxy_host, proxy.proxy_port );

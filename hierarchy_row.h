@@ -45,6 +45,7 @@ private:
 		m_dimension_type = other.m_dimension_type;
 		m_hierarcy_cardinality = other.m_hierarcy_cardinality;
 		m_structure = other.m_structure;
+		m_hierarchy_origin = other.m_hierarchy_origin;
 	}
 public:
 	wchar_t*         m_catalog;
@@ -61,6 +62,7 @@ public:
 	wchar_t*         m_all_member;
 	wchar_t*         m_description;
 	short            m_structure;
+	int				 m_hierarchy_origin;
 
 	hierarchy_row( row& a_row )
 	{
@@ -90,6 +92,8 @@ public:
 		m_dimension_type = get_int( a_row.DIMENSION_USCORETYPE );
 		m_hierarcy_cardinality = get_int( a_row.HIERARCHY_USCORECARDINALITY );
 		m_structure = get_int( a_row.STRUCTURE );//2;//MD_STRUCTURE_UNBALANCED;
+		m_hierarchy_origin = 1; //default MD_USER_DEFINED
+		if ( nullptr != a_row.HIERARCHY__USCOREORIGIN ) { get_int( a_row.HIERARCHY__USCOREORIGIN ); }
 	}
 
 	hierarchy_row( const hierarchy_row& other )
@@ -135,5 +139,6 @@ public:
 	PROVIDER_COLUMN_ENTRY_VAR_WSTR( "ALL_MEMBER", 12, MAX_BUF_SIZE, m_all_member )
 	PROVIDER_COLUMN_ENTRY_VAR_WSTR( "DESCRIPTION", 13, MAX_BUF_SIZE, m_description )
 	PROVIDER_COLUMN_ENTRY_TYPE( "STRUCTURE", 14, VT_I2, m_structure )
+	PROVIDER_COLUMN_ENTRY_TYPE( "HIERARCHY_ORIGIN", 15, VT_I4, m_hierarchy_origin )
 	END_PROVIDER_COLUMN_MAP()
 };

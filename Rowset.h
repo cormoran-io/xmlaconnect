@@ -36,7 +36,7 @@ class rowset:
 {
 	friend class row_data;
 private:
-	connection_handler* mConnectionHandler;
+	connection_handler* m_connection_handler;
 public:
 BEGIN_COM_MAP(rowset)
 	COM_INTERFACE_ENTRY(IMDDataset)

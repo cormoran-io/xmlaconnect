@@ -91,6 +91,12 @@
     <ClCompile Include="pac_interpreter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="session.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mondrian_session_table.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -150,9 +156,6 @@
     <ClInclude Include="axis_row.h">
       <Filter>Header Files\axis</Filter>
     </ClInclude>
-    <ClInclude Include="connection_handler.h">
-      <Filter>Header Files\data_link</Filter>
-    </ClInclude>
     <ClInclude Include="pass_prompt.h">
       <Filter>Header Files\ui</Filter>
     </ClInclude>
@@ -198,7 +201,13 @@
     <ClInclude Include="pac_interpreter.h">
       <Filter>Header Files\config</Filter>
     </ClInclude>
-    <ClInclude Include="dimension_properties.h">
+    <ClInclude Include="dbproperties_impl.h">
+      <Filter>Header Files\com</Filter>
+    </ClInclude>
+    <ClInclude Include="connection_handler.h">
+      <Filter>Header Files\data_link</Filter>
+    </ClInclude>
+    <ClInclude Include="mondrian_session_table.h">
       <Filter>Header Files\compatibility</Filter>
     </ClInclude>
   </ItemGroup>

@@ -24,6 +24,16 @@ alias .unique_name=.UniqueName
 alias .LEVEL_NUMBER=.Properties("LEVEL_NUMBER")
 alias .properties("caption")=.caption
 
+# Aliases are plain string replacements. The syntax is:
+# alias string_to_replace=replacement_string
+# There is no lexer involved so be aware.
+# Trying to alias to little might break the syntax.
+# Try to use token separators to clarify what you need. Also note that whitespaces
+# in the definition DO COUNT.
+
+delimited_alias NON EMPTY,ON,CrossJoin=NonEmptyCrossJoin
+delimited_alias NONEMPTY,ON,CrossJoin=NonEmptyCrossJoin
+
 # Substitutions try to replace a function with an alternate. The syntax is:
 # subs function_definition=expression_definition
 # a function definition goes like this:
@@ -38,7 +48,16 @@ alias .properties("caption")=.caption
 subst CrossJoin(%1,%2,%3)=CrossJoin(%1,CrossJoin(%2,%3))
 subst NonEmpty(%1,%2)=Filter(%1,not isEmpty(%2.Item(0)))
 
-#Regex substitutions
-regex \[+[_[:alnum:]\.\'\*\+\?[:space:]\\$]+\]+\.+currentmember+\.+LEVEL_NUMBER==CAST( $& AS INTEGER )
+# Regex substitutions use ECMAScript syntax (http://www.cplusplus.com/reference/regex/ECMAScript/)
+# the syntax of a substitution is:
+# regex rule==substitution
+regex \[[_[:alnum:]\.\'\*\+\-\?[:space:]\\$]+\]\.currentmember\.LEVEL_NUMBER==CAST( $& AS INTEGER )
+
+# Delimited aliases replace key with value for the text marked by start and stop. 
+# If the pair start/stop occurs more than once then the replacement is tried on
+# all occurences.
+# the syntax is:
+# delimited_alias start,stop,key,val
+delimited_alias NON EMPTY, ON ,CrossJoin=NonEmptyCrossJoin
 
 # Leave an empty line at the end

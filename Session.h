@@ -23,7 +23,10 @@
 #pragma once
 
 #include <strsafe.h>
+#include "config_data.h"
 
+//from msmd.h
+#define DBPROP_VISUALMODE				(DBPROP_SESS_AUTOCOMMITISOLEVELS  + 1)
 
 class catalog_rowset;
 class cube_rowset;
@@ -52,6 +55,8 @@ class ATL_NO_VTABLE session :
 	public IGetSelf	, 
 	public ISupportErrorInfo
 {
+private:
+	std::auto_ptr< connection_handler > m_connection_handler;
 public:
 	struct session_data
 	{
@@ -63,10 +68,9 @@ public:
 			JEDOX = 3
 		};
 
-		int id;
 		server_type server;
 
-		session_data() : id(-1), server( UNDEFINED ){}
+		session_data() : server( UNDEFINED ){}
 
 		void register_server( const char* server_data )
 		{
@@ -74,6 +78,12 @@ public:
 			if ( str_match( server_data, "Apache" ) ) { server = MONDRIAN; return; }
 			if ( str_match( server_data, "gSOAP" ) ) { server = ORACLE; return; }
 			if ( str_match( server_data, "Palo" ) ) { server = JEDOX; return; }
+		}
+
+		bool mondrian() 
+		{
+			if ( MONDRIAN == server ) return true;
+			return false;
 		}
 
 	private:
@@ -86,25 +96,28 @@ public:
 			return 0 == *match;
 		}
 	};
-	typedef std::map< session*, session_data > session_table_type;
-	static  session_table_type& session_table(){
-		static session_table_type result;
-		return result;
+
+	typedef std::vector< session* > session_table_type;
+
+	static session_table_type& session_table()
+	{
+		static session_table_type instance;
+		return instance;
 	}
 public:
-
-
 	DECLARE_PROTECT_FINAL_CONSTRUCT()
 
 	HRESULT FinalConstruct()
 	{
-		session_table()[ this ] = session_data();
+		session_table().push_back( this );
 		return FInit();
 	}
 	
 	void FinalRelease() 	
 	{
-		session_table().erase( session_table().find( this ) );
+		session_table_type& st = session_table();
+		
+		st.erase( std::find( st.begin(), st.end(), this ) );
 	}
 
 	STDMETHOD(OpenRowset)(IUnknown *pUnk, DBID *pTID, DBID *pInID, REFIID riid,
@@ -143,10 +156,29 @@ public:
 		return S_OK;
 	}
 
+HRESULT init_connection_handler();
+
+static connection_handler* connection_handler( IUnknown* aSession )
+{
+	session* session_obj;
+	IGetSelf* pGetSelf;
+	aSession->QueryInterface( __uuidof( IGetSelf ) , ( void** ) &pGetSelf );
+	pGetSelf->GetSelf( (void**)&session_obj );
+	pGetSelf->Release();
+
+	if ( nullptr == session_obj->m_connection_handler.get() ) { session_obj->init_connection_handler(); }
+
+	return session_obj->m_connection_handler.get();
+}
+
+
 BEGIN_PROPSET_MAP(session)
-	BEGIN_PROPERTY_SET(DBPROPSET_SESSION)
+	BEGIN_PROPERTY_SET_COND(config_data::visual_totals(), DBPROPSET_SESSION)
 		PROPERTY_INFO_ENTRY( CURRENTCATALOG )
-	END_PROPERTY_SET(DBPROPSET_SESSION)
+		PROPERTY_INFO_ENTRY_VALUE( VISUALMODE, MDPROPVAL_VISUAL_MODE_VISUAL )
+	ELSE_PROPERTY_SET_COND(DBPROPSET_SESSION)
+		PROPERTY_INFO_ENTRY( CURRENTCATALOG )
+	END_PROPERTY_SET_COND(DBPROPSET_SESSION)
 END_PROPSET_MAP()
 
 BEGIN_COM_MAP(session)
@@ -175,26 +207,7 @@ BEGIN_SCHEMA_MAP(session)
 END_SCHEMA_MAP()
 
 };
-/*
-ULONG CComPolyObject<session>::AddRef()
-{
-		TCHAR buffer[256];
-		StringCbPrintf(buffer, 256, TEXT("Session::AddRef %lu\n"),m_dwRef);
-		OutputDebugString(buffer);
-		return InternalAddRef();
-}
 
-ULONG CComPolyObject<session>::Release()
-{
-		TCHAR buffer[256];
-		StringCbPrintf(buffer, 256, TEXT("Session::Release %lu\n"),m_dwRef);
-		OutputDebugString(buffer);
-		ULONG l = InternalRelease();
-		if (l == 0)
-			delete this;
-		return l;
-}
-*/
 #include "catalog_row.h"
 #include "cube_row.h"
 #include "dimension_row.h"
@@ -213,7 +226,123 @@ class dimension_rowset : public base_rowset< dimension_rowset, dimension_row, se
 class function_rowset : public base_rowset< function_rowset, function_row, session >{};
 class hierarchy_rowset : public base_rowset< hierarchy_rowset, hierarchy_row, session >{};
 class level_rowset : public base_rowset< level_rowset, level_row, session >{};
-class member_rowset : public base_rowset< member_rowset, member_row, session >{};
-class measure_rowset : public base_rowset< measure_rowset, measure_row, session >{};
+class member_rowset : public base_rowset< member_rowset, member_row, session >
+{
+public:
+
+	//IDBSchemaRowset implementation
+	HRESULT Execute( DBROWCOUNT* pcRowsAffected, ULONG cRestrictions, const VARIANT* rgRestrictions ) 
+	{
+		connection_handler* handler = session::connection_handler( m_spUnkSite );
+
+
+		member_row buf;
+		if ( handler->get_session_member( cRestrictions, rgRestrictions, buf ) )
+		{
+			m_rgRowData.Add( buf );
+			*pcRowsAffected = 1;
+			return S_OK;
+		}
+
+		int result = handler->discover( member_row::schema_name(), cRestrictions, rgRestrictions);
+		if ( handler->no_session() ) {
+			result = handler->discover( member_row::schema_name(), cRestrictions, rgRestrictions);
+		}
+		if ( S_OK != result ) {
+			make_error( FROM_STRING( handler->fault_string(), CP_UTF8 ) );
+			return E_FAIL;
+		}
+
+		for ( int i = 0, e = handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {			
+			m_rgRowData.Add( member_row( handler->discover_response().cxmla__return__.root.__rows.row[i] ) );
+		}
+
+
+		*pcRowsAffected = (LONG) m_rgRowData.GetCount();
+		return S_OK;
+	}
+};
+class measure_rowset : public base_rowset< measure_rowset, measure_row, session >
+{
+public:
+
+	//IDBSchemaRowset implementation
+	HRESULT Execute( DBROWCOUNT* pcRowsAffected, ULONG cRestrictions, const VARIANT* rgRestrictions ) 
+	{
+		connection_handler* handler = session::connection_handler( m_spUnkSite );
+
+		int result = handler->discover( measure_row::schema_name(), cRestrictions, rgRestrictions);
+		if ( handler->no_session() ) {
+			result = handler->discover( measure_row::schema_name(), cRestrictions, rgRestrictions);
+		}
+		if ( S_OK != result ) {
+			make_error( FROM_STRING( handler->fault_string(), CP_UTF8 ) );
+			return E_FAIL;
+		}
+
+		for ( int i = 0, e = handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {			
+			m_rgRowData.Add( measure_row( handler->discover_response().cxmla__return__.root.__rows.row[i] ) );
+		}
+
+		if ( m_rgRowData.IsEmpty() ) { return S_OK; }
+
+		std::vector< std::pair< std::string, std::string > > mondrian_session_measures = handler->get_session_measures();
+
+		for ( size_t i = 0; i < mondrian_session_measures.size(); ++i )
+		{
+			measure_row row(m_rgRowData.GetAt(0) );
+
+			delete[] row.m_measure_name;
+			delete[] row.m_measure_unique_name;
+			delete[] row.m_measure_caption;
+			delete[] row.m_description;
+
+			row.m_measure_name = _wcsdup( FROM_STRING( mondrian_session_measures[i].second.c_str(), CP_UTF8 ) );
+			row.m_measure_unique_name = _wcsdup( FROM_STRING( mondrian_session_measures[i].first.c_str(), CP_UTF8 ) );
+			row.m_measure_caption = _wcsdup( FROM_STRING( mondrian_session_measures[i].second.c_str(), CP_UTF8 ) );
+			row.m_description = _wcsdup( FROM_STRING( mondrian_session_measures[i].second.c_str(), CP_UTF8 ) );
+
+			m_rgRowData.Add( row );
+		}
+
+
+		*pcRowsAffected = (LONG) m_rgRowData.GetCount();
+		return S_OK;
+	}
+};
 class property_rowset : public base_rowset< property_rowset, property_row, session >{};
-class set_rowset : public base_rowset< set_rowset, set_row, session >{};
+class set_rowset : public base_rowset< set_rowset, set_row, session >
+{
+public:
+
+	//IDBSchemaRowset implementation
+	HRESULT Execute( DBROWCOUNT* pcRowsAffected, ULONG cRestrictions, const VARIANT* rgRestrictions ) 
+	{
+		connection_handler* handler = session::connection_handler( m_spUnkSite );
+
+		int result = handler->discover( set_row::schema_name(), cRestrictions, rgRestrictions);
+		if ( handler->no_session() ) {
+			result = handler->discover( set_row::schema_name(), cRestrictions, rgRestrictions);
+		}
+		if ( S_OK != result ) {
+			make_error( FROM_STRING( handler->fault_string(), CP_UTF8 ) );
+			return E_FAIL;
+		}
+
+		for ( int i = 0, e = handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {			
+			m_rgRowData.Add( set_row( handler->discover_response().cxmla__return__.root.__rows.row[i] ) );
+		}
+
+		std::vector< set_row > mondrian_session_sets = handler->get_session_sets( cRestrictions, rgRestrictions );
+
+		for ( size_t i = 0; i < mondrian_session_sets.size(); ++i )
+		{
+
+			m_rgRowData.Add( mondrian_session_sets[i] );
+		}
+
+
+		*pcRowsAffected = (LONG) m_rgRowData.GetCount();
+		return S_OK;
+	}
+};

@@ -41,7 +41,6 @@ private:
 		m_unqualified_cap = nullptr;
 		m_group_name = nullptr;
 		m_display_folder = nullptr;
-//		m_format_str = nullptr;
 		
 		m_measure_agregator	= other.m_measure_agregator;
 		m_data_type			= other.m_data_type;
@@ -90,7 +89,6 @@ public:
 		m_unqualified_cap = nullptr;
 		m_group_name = nullptr;
 		m_display_folder = nullptr;
-//		m_format_str = nullptr;
 
 		m_measure_agregator	= get_int( a_row.MEASURE_USCOREAGGREGATOR );
 		m_data_type			= get_int( a_row.DATA_USCORETYPE );

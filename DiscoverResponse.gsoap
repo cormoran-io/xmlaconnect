@@ -46,9 +46,9 @@ public:
 	xsd__string		LEVEL_USCORECAPTION;
 	xsd__string		LEVEL_USCORECARDINALITY;
 	xsd__string		LEVEL_USCORETYPE;
+	xsd__string		PROPERTY_USCORETYPE;
 	xsd__string		PROPERTY_USCORENAME;
 	xsd__string		PROPERTY_USCORECAPTION;
-	xsd__string		PROPERTY_USCORETYPE;
 	xsd__string		PropertyName;
 	xsd__string		PropertyDescription;
 	xsd__string		PropertyType;
@@ -81,6 +81,7 @@ public:
 	xsd__string		SET_USCOREDISPLAY_USCOREFOLDER;
 	xsd__string		STRUCTURE;
 	xsd__string		DIMENSIONS;
+	xsd__string		HIERARCHY__USCOREORIGIN;
 	}*  row;	
 };
 
@@ -92,15 +93,55 @@ class element_schema
 public:
 	struct complexType_schema {
 		struct sequence_schema {
+			xsd__string		@maxOccurs;
+			xsd__string		@minOccurs;
 			struct element__ {
-					xsd__string		@maxOccurs = "unbounded";
-					xsd__string		@minOccurs = "0";
 					xsd__string		@name = "row";
 					xsd__string		@type = "row";
+					xsd__string		@maxOccurs;
+					xsd__string		@minOccurs;
 			} xsd__element;
 		} xsd__sequence;
 	} xsd__complexType;
 	xsd__string @name = "root";
+};
+
+
+class _sequence 
+{
+public:
+	int __size;
+	struct element
+	{
+		xsd__string		@sql__field;
+		xsd__string		@minOccurs;
+		xsd__string		@name;
+		xsd__string		@type;
+	}*  xsd__element;	
+};
+
+class special_element 
+{
+public:
+	xsd__string		@sql__field;
+	xsd__string		@minOccurs;
+	xsd__string		@name;
+	xsd__string		@maxOccurs;
+	struct cmpType {
+		struct seq {
+			_sequence xsd__sequence;
+		}			__sequence;
+	}   			xsd__complexType;
+};
+
+
+class elem_complexType
+{
+	struct xsd__sequence {
+		_sequence			__sequence;
+		special_element		xsd__element;
+		_sequence			__sequence2;
+	} xsd__sequence;
 };
 
 class simpleType
@@ -115,24 +156,34 @@ public:
 	} xsd__restriction;
 };
 
-class sequence 
-{
-	int __size;
-	struct element
-	{
-		xsd__string		@sql__field;
-		xsd__string		@minOccurs;
-		xsd__string		@name;
-		xsd__string		@type;			
-	}*  xsd__element;	
-
-};
-
 class datasource_complexType
 {
 public:
-	xsd__string		@name="row";
-	sequence xsd__sequence;
+	_sequence			xsd__sequence;
+};
+
+class _cmpType {
+	xsd__string					@name="row";
+	datasource_complexType*		__cmp;
+	elem_complexType*			__cmpsc;
+};
+
+class _sequenceX
+{
+public:
+	xsd__string  xsd__any;	
+};
+
+class datasource_complexTypeX
+{
+public:
+	_sequenceX			xsd__sequence;
+};
+
+class elem_complexTypeX
+{
+	xsd__string					@name="xmlDocument";
+	datasource_complexTypeX*	__cmp;
 };
 
 class schema
@@ -140,10 +191,12 @@ class schema
 public:
 	xsd__string							@elementFormDefault = "qualified";
 	xsd__string							@targetNamespace = "urn:schemas-microsoft-com:xml-analysis:rowset";
-	xsd__string							@xmlns="urn:schemas-microsoft-com:xml-analysis:rowset";	
+	xsd__string							@xmlns__sql;
+
 	element_schema						xsd__element;
-	simpleType							xsd__simpleType;
-	datasource_complexType				xsd__complexType;
+	simpleType							xsd__simpleType;	
+	_cmpType							xsd__complexType;
+	elem_complexTypeX*					xsd__complexType_;
 };
 
 class root__

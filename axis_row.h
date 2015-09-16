@@ -26,6 +26,7 @@ class axis_row
 {
 private:
 	static const size_t MAX_BUF_SIZE = 10 * 1024 * sizeof( wchar_t );
+	bool m_should_fix_aliases;
 private:
 	char*					m_data_exchange;
 	xmlns__Axis*			m_axis;
@@ -33,9 +34,18 @@ private:
 	ATLCOLUMNINFO*			m_col_info;
 	unsigned int			m_col_info_cnt;
 	DBLENGTH				m_buf_size;
-	typedef 				std::map<unsigned short, unsigned short> m_indirection_type;
-	m_indirection_type		m_indirection;
-	std::vector<size_t>		m_boundaries;
+
+	struct member_def
+	{
+		bool has_parent_uniq_name;
+		bool has_member_uniq_name;
+		bool has_member_type;
+		std::vector< std::string > custom_props;
+
+		member_def() : has_parent_uniq_name(false), has_member_uniq_name(false), has_member_type(false) {}
+	};
+
+	std::vector<member_def> m_member_defs;
 public:
 	axis_row()
 	{
@@ -48,27 +58,45 @@ public:
 	{
 		clear();
 	}
+	
 
 	void setup_data( DBCOUNTITEM idx, connection_handler* handler ) {
 
 		clear();
+		m_should_fix_aliases = handler->should_fix_aliases();
 
 		handler->get_axis( idx, m_axis, m_axis_info );
 		
 		m_col_info_cnt = 1;//TUPLE_ORDINAL;
 		for ( unsigned int i = 0, e = m_axis_info->__size; i < e; ++i ) {
+			m_member_defs.push_back( member_def() );
 			m_col_info_cnt += 5;//required columns;
 			xmlns__HierarchyInfo hInfo = m_axis_info->HierarchyInfo[i];
 			if ( nullptr != hInfo.PARENT_USCOREUNIQUE_USCORENAME ) {
+				m_member_defs[i].has_parent_uniq_name = true;
 				++m_col_info_cnt;
 			}
 			if ( nullptr != hInfo.MEMBER_USCORENAME ) {
+				m_member_defs[i].has_member_uniq_name = true;
 				++m_col_info_cnt;
 			}
 			if ( nullptr != hInfo.MEMBER_USCORETYPE ) {
+				m_member_defs[i].has_member_type = true;
 				++m_col_info_cnt;
 			}
-			m_col_info_cnt += hInfo.__userProp.__size;
+		//	m_col_info_cnt += hInfo.__userProp.__size;
+			for ( int j = 0; j < hInfo.__userProp.__size; ++j )
+			{
+/*
+				if ( handler->m_sesion_data.mondrian() ) {
+					if ( !query_translator::translator().isProp( hInfo.__userProp.__array[j].name,  handler->m_sesion_data.server ) ) {
+						continue;
+					}
+				}
+*/
+				m_member_defs[i].custom_props.push_back( hInfo.__userProp.__array[j].elementName ) ;
+				++m_col_info_cnt;
+			}
 		}
 		m_buf_size = 0;
 
@@ -90,7 +118,6 @@ public:
 
 		for ( unsigned int i = 0, e = m_axis_info->__size; i < e; ++i ) {
 			xmlns__HierarchyInfo hInfo = m_axis_info->HierarchyInfo[i];
-			m_boundaries.push_back(crtColInfo);
 			m_col_info[crtColInfo].pwszName = _wcsdup( CA2W( hInfo.UName.name, CP_UTF8 ) );
 			m_col_info[crtColInfo].pTypeInfo = (ITypeInfo*)nullptr;
 			m_col_info[crtColInfo].iOrdinal = crtColInfo+1;
@@ -168,7 +195,6 @@ public:
 				m_col_info[crtColInfo].cbOffset = m_buf_size;
 				memset( &( m_col_info[crtColInfo].columnid ), 0, sizeof( DBID ));
 				m_buf_size += m_col_info[crtColInfo].ulColumnSize;
-				m_indirection[crtColInfo-1] = 0;
 				++crtColInfo;
 			}
 			if ( nullptr != hInfo.MEMBER_USCORENAME ) {
@@ -183,7 +209,6 @@ public:
 				m_col_info[crtColInfo].cbOffset = m_buf_size;
 				memset( &( m_col_info[crtColInfo].columnid ), 0, sizeof( DBID ));
 				m_buf_size += m_col_info[crtColInfo].ulColumnSize;
-				m_indirection[crtColInfo-1] = 1;
 				++crtColInfo;
 			}
 			if ( nullptr != hInfo.MEMBER_USCORETYPE ) {
@@ -198,11 +223,17 @@ public:
 				m_col_info[crtColInfo].cbOffset = m_buf_size;
 				memset( &( m_col_info[crtColInfo].columnid ), 0, sizeof( DBID ));
 				m_buf_size += m_col_info[crtColInfo].ulColumnSize;
-				m_indirection[crtColInfo-1] = 2;
 				++crtColInfo;
 			}
 
 			for ( unsigned int j = 0, je = hInfo.__userProp.__size; j < je; ++j ) {
+/*
+				if ( handler->m_sesion_data.mondrian() ) {
+					if ( !query_translator::translator().isProp( hInfo.__userProp.__array[j].name,  handler->m_sesion_data.server ) ) {
+						continue;
+					}
+				}
+*/
 				m_col_info[crtColInfo].pwszName = _wcsdup( CA2W( hInfo.__userProp.__array[j].elementName, CP_UTF8 ) );
 				m_col_info[crtColInfo].pTypeInfo = (ITypeInfo*)nullptr;
 				m_col_info[crtColInfo].iOrdinal = crtColInfo+1;
@@ -214,7 +245,6 @@ public:
 				m_col_info[crtColInfo].cbOffset = m_buf_size;
 				memset( &( m_col_info[crtColInfo].columnid ), 0, sizeof( DBID ));
 				m_buf_size += m_col_info[crtColInfo].ulColumnSize;
-				m_indirection[crtColInfo-1] = 3 + j;
 				++crtColInfo;
 			}
 		}
@@ -222,105 +252,256 @@ public:
 		m_data_exchange = new char[ m_buf_size ];
 	}
 
-	inline const char& operator[]( size_t idx ) const
+	class string_replacer
 	{
-		if ( idx >= (size_t)m_axis->Tuples.__size ) {
+	private:
+		std::string ret;
+	public:
+		string_replacer( char* in, const std::string& what, const std::string&  with )
+			: ret( in )
+		{
+			size_t idx = ret.find( what );
+			if ( std::string::npos == idx || 0 != idx ) { return; }
+			ret.replace( 0, what.length(), with );
+		}
+		operator const char*()
+		{
+			return ret.c_str();
+		}
+	};
+		
+	inline const char& get_fix_aliases( size_t index ) const
+	{
+		xmlns__Tuple& crtTuple = m_axis->Tuples.Tuple[index];
+		DBLENGTH offset = 0;
+		size_t idx = 0;
+
+		//Tuple Ordinal
+		*( ( DBLENGTH *) ( m_data_exchange + offset ) ) = (DBLENGTH)index;
+		offset += m_col_info[idx].ulColumnSize;
+		++idx;
+
+		for ( int i = 0; i < crtTuple.__size; ++i )
+		{
+			std::string hier_candidate(crtTuple.Member[ i ].Hierarchy);
+
+			//when the dimension name and hierarchy name are the same there is a reduction rule:
+			//foo.foo will be replaced by [foo] only in the member unique name.
+			const size_t the_size = hier_candidate.size();
+			if ( 1 == ( the_size % 2 ) && '.'== hier_candidate[the_size/2] && hier_candidate.substr(0, the_size / 2 ) == hier_candidate.substr( the_size / 2 + 1, the_size / 2 ) )
+			{
+				hier_candidate = hier_candidate.substr(0, the_size / 2 );
+			}
+
+			std::string hier_uname = std::string("[") + hier_candidate + "]";
+			std::string u_name(crtTuple.Member[ i ].UName);
+
+			if ( u_name.substr(0, hier_uname.length() ) == hier_uname )
+			{
+				//UName
+				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].UName, CP_UTF8 ) );
+				offset += m_col_info[idx++].ulColumnSize;
+				//Caption
+				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].Caption, CP_UTF8 ) );
+				offset += m_col_info[idx++].ulColumnSize;
+				//LName
+				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].LName, CP_UTF8 ) );
+				offset += m_col_info[idx++].ulColumnSize;
+				//LNum
+				*( ( long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ i ].LNum );
+				offset += m_col_info[idx++].ulColumnSize;
+				//DisplayInfo
+				*( ( unsigned long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ i ].DisplayInfo );
+				offset += m_col_info[idx++].ulColumnSize;
+
+				if ( m_member_defs[i].has_parent_uniq_name )
+				{
+					char* prop = crtTuple.Member[ i ].PARENT_USCOREUNIQUE_USCORENAME;
+					if ( nullptr != prop ) {
+						wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( prop, CP_UTF8 ) );
+					} else {
+						*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
+					}
+					offset += m_col_info[idx++].ulColumnSize;
+				}
+			} else {
+				std::string to_replace = u_name.substr( 0, u_name.find(']')+1);
+
+				//UName
+				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( string_replacer(crtTuple.Member[ i ].UName, to_replace, hier_uname )  , CP_UTF8 ) );
+				offset += m_col_info[idx++].ulColumnSize;
+				//Caption
+				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].Caption, CP_UTF8 ) );
+				offset += m_col_info[idx++].ulColumnSize;
+				//LName
+				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( string_replacer(crtTuple.Member[ i ].LName, to_replace, hier_uname ), CP_UTF8 ) );
+				offset += m_col_info[idx++].ulColumnSize;
+				//LNum
+				*( ( long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ i ].LNum );
+				offset += m_col_info[idx++].ulColumnSize;
+				//DisplayInfo
+				*( ( unsigned long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ i ].DisplayInfo );
+				offset += m_col_info[idx++].ulColumnSize;
+
+				if ( m_member_defs[i].has_parent_uniq_name )
+				{
+					char* prop = crtTuple.Member[ i ].PARENT_USCOREUNIQUE_USCORENAME;
+					if ( nullptr != prop ) {
+						wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( string_replacer( prop, to_replace, hier_uname ), CP_UTF8 ) );
+					} else {
+						*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
+					}
+					offset += m_col_info[idx++].ulColumnSize;
+				}
+			}
+
+			if ( m_member_defs[i].has_member_uniq_name )
+			{
+				char* prop = crtTuple.Member[ i ].MEMBER_USCORENAME;
+				if ( nullptr != prop ) {
+					wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( prop, CP_UTF8 ) );
+				} else {
+					*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
+				}
+				offset += m_col_info[idx++].ulColumnSize;
+			}
+
+			if ( m_member_defs[i].has_member_type )
+			{
+				static const std::string regular("MDMEMBER_TYPE_REGULAR");
+				static const std::string all("MDMEMBER_TYPE_ALL");
+				static const std::string measure("MDMEMBER_TYPE_MEASURE");
+				static const std::string formula("MDMEMBER_TYPE_FORMULA");
+				const char* type = crtTuple.Member[ i ].MEMBER_USCORETYPE;
+				if ( regular == type ) {
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_REGULAR;
+				} else if ( all == type ){
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_ALL;
+				} else if ( measure == type ) {
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_MEASURE;
+				} else if ( formula == type ) {
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_FORMULA;
+				} else {//UNKNOWN
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_UNKNOWN;
+				}
+				offset += m_col_info[idx++].ulColumnSize;
+			}
+
+			for ( size_t j = 0; j < m_member_defs[i].custom_props.size(); ++j )
+			{
+				*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
+
+				for( int k = 0; k < crtTuple.Member[ i ].__userProp.__size; ++ k )
+				{
+					if ( m_member_defs[i].custom_props[j] == crtTuple.Member[ i ].__userProp.__array[k].elementName )
+					{
+						wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].__userProp.__array[k].value, CP_UTF8 ) );
+						break;
+					}
+				}
+
+				offset += m_col_info[idx++].ulColumnSize;
+			}
+		}
+		return *m_data_exchange;
+
+	}
+
+	inline const char& operator[]( size_t index ) const
+	{
+		if ( index >= (size_t)m_axis->Tuples.__size ) {
 			throw std::runtime_error( "index out of bounds" );
 		}
 
-		const unsigned short member_size = ( m_col_info_cnt - 1 ) / m_axis_info->__size;
-		xmlns__Tuple& crtTuple = m_axis->Tuples.Tuple[idx];
+		if ( m_should_fix_aliases )
+		{
+			return get_fix_aliases( index );
+		}
+
+		xmlns__Tuple& crtTuple = m_axis->Tuples.Tuple[index];
 		DBLENGTH offset = 0;
+		size_t idx = 0;
 
-		*( ( DBLENGTH *) m_data_exchange ) = idx;
-		offset += m_col_info[0].ulColumnSize;
+		//Tuple Ordinal
+		*( ( DBLENGTH *) ( m_data_exchange + offset ) ) = (DBLENGTH)index;
+		offset += m_col_info[idx].ulColumnSize;
+		++idx;
 
-		size_t pos = 0;
-		size_t length = m_boundaries.size() - 1;
-		for ( unsigned short i = 1; i < m_col_info_cnt; ++i ) {
-			if ( (pos < length) && (i == m_boundaries[pos+1] ) ) {
-				++pos;
-			}
-			unsigned short idx = i- m_boundaries[pos];//( i-1 ) % member_size;
-			unsigned short memberIdx = pos;//(i - 1 ) / member_size;
-			switch ( idx ) {
-			case 0://UName
-				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[i].ulColumnSize / 2, CA2W( crtTuple.Member[ memberIdx ].UName, CP_UTF8 ) );
-				offset += m_col_info[i].ulColumnSize;
-				break;
-			case 1://Caption
-				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[i].ulColumnSize / 2, CA2W( crtTuple.Member[ memberIdx ].Caption, CP_UTF8 ) );
-				offset += m_col_info[i].ulColumnSize;
-				break;
-			case 2://LName
-				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[i].ulColumnSize / 2, CA2W( crtTuple.Member[ memberIdx ].LName, CP_UTF8 ) );
-				offset += m_col_info[i].ulColumnSize;
-				break;
-			case 3://LNum
-				*( ( long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ memberIdx ].LNum );
-				offset += m_col_info[i].ulColumnSize;
-				break;
-			case 4://DisplayInfo
-				*( ( unsigned long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ memberIdx ].DisplayInfo );
-				offset += m_col_info[i].ulColumnSize;
-				break;
-			default://optional
-				{
-					//unsigned short customIdx = m_indirection.at(idx);
-					switch ( m_indirection.at( i - 1 ) ) {
-					case 0://ParentUniqueName
-						if ( nullptr != crtTuple.Member[ memberIdx ].PARENT_USCOREUNIQUE_USCORENAME ) {
-							wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[i].ulColumnSize / 2, CA2W( crtTuple.Member[ memberIdx ].PARENT_USCOREUNIQUE_USCORENAME, CP_UTF8 ) );
-						} else {
-							*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
-						}
-						offset += m_col_info[i].ulColumnSize;
-						break;
-					case 1://MEMBER_USCORENAME
-						if ( nullptr != crtTuple.Member[ memberIdx ].MEMBER_USCORENAME ) {
-							wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[i].ulColumnSize / 2, CA2W( crtTuple.Member[ memberIdx ].MEMBER_USCORENAME, CP_UTF8 ) );
-						}  else {
-							*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
-						}
-						offset += m_col_info[i].ulColumnSize;
-						break;
-					case 2://MEMBER_USCORETYPE
-						{
-							static const std::string regular("MDMEMBER_TYPE_REGULAR");
-							static const std::string all("MDMEMBER_TYPE_ALL");
-							static const std::string measure("MDMEMBER_TYPE_MEASURE");
-							static const std::string formula("MDMEMBER_TYPE_FORMULA");
-							const char* type = crtTuple.Member[ memberIdx ].MEMBER_USCORETYPE;
-							if ( regular == type ) {
-								*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_REGULAR;
-							} else if ( all == type ){
-								*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_ALL;
-							} else if ( measure == type ) {
-								*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_MEASURE;
-							} else if ( formula == type ) {
-								*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_FORMULA;
-							} else {//UNKNOWN
-								*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_UNKNOWN;
-							}
-							offset += m_col_info[i].ulColumnSize;
-						}
-						break;
-					default://custom props
-						{
-							size_t crt_idx = m_indirection.at( i - 1 ) - 3;
-							if ( crtTuple.Member[ memberIdx ].__userProp.__size <= crt_idx )
-							{
-								*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
-							} else
-							{
-								wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[i].ulColumnSize / 2, CA2W( crtTuple.Member[ memberIdx ].__userProp.__array[crt_idx].value, CP_UTF8 ) );
-							}
-							offset += m_col_info[i].ulColumnSize;
-						}
-						break;
-					};
+		for ( int i = 0; i < crtTuple.__size; ++i )
+		{
+			//UName
+			wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].UName, CP_UTF8 ) );
+			offset += m_col_info[idx++].ulColumnSize;
+			//Caption
+			wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].Caption, CP_UTF8 ) );
+			offset += m_col_info[idx++].ulColumnSize;
+			//LName
+			wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].LName, CP_UTF8 ) );
+			offset += m_col_info[idx++].ulColumnSize;
+			//LNum
+			*( ( long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ i ].LNum );
+			offset += m_col_info[idx++].ulColumnSize;
+			//DisplayInfo
+			*( ( unsigned long* )( m_data_exchange + offset ) ) = atol( crtTuple.Member[ i ].DisplayInfo );
+			offset += m_col_info[idx++].ulColumnSize;
+
+			if ( m_member_defs[i].has_parent_uniq_name )
+			{
+				char* prop = crtTuple.Member[ i ].PARENT_USCOREUNIQUE_USCORENAME;
+				if ( nullptr != prop ) {
+					wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( prop, CP_UTF8 ) );
+				} else {
+					*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
 				}
-				break;
+				offset += m_col_info[idx++].ulColumnSize;
+			}
+
+			if ( m_member_defs[i].has_member_uniq_name )
+			{
+				char* prop = crtTuple.Member[ i ].MEMBER_USCORENAME;
+				if ( nullptr != prop ) {
+					wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( prop, CP_UTF8 ) );
+				} else {
+					*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
+				}
+				offset += m_col_info[idx++].ulColumnSize;
+			}
+
+			if ( m_member_defs[i].has_member_type )
+			{
+				static const std::string regular("MDMEMBER_TYPE_REGULAR");
+				static const std::string all("MDMEMBER_TYPE_ALL");
+				static const std::string measure("MDMEMBER_TYPE_MEASURE");
+				static const std::string formula("MDMEMBER_TYPE_FORMULA");
+				const char* type = crtTuple.Member[ i ].MEMBER_USCORETYPE;
+				if ( regular == type ) {
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_REGULAR;
+				} else if ( all == type ){
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_ALL;
+				} else if ( measure == type ) {
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_MEASURE;
+				} else if ( formula == type ) {
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_FORMULA;
+				} else {//UNKNOWN
+					*( ( long* )( m_data_exchange + offset ) ) = MDMEMBER_TYPE_UNKNOWN;
+				}
+				offset += m_col_info[idx++].ulColumnSize;
+			}
+
+			for ( size_t j = 0; j < m_member_defs[i].custom_props.size(); ++j )
+			{
+				*( ( wchar_t* )( m_data_exchange + offset ) ) = 0;
+
+				for( int k = 0; k < crtTuple.Member[ i ].__userProp.__size; ++ k )
+				{
+					if ( m_member_defs[i].custom_props[j] == crtTuple.Member[ i ].__userProp.__array[k].elementName )
+					{
+						wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].__userProp.__array[k].value, CP_UTF8 ) );
+						break;
+					}
+				}
+
+				offset += m_col_info[idx++].ulColumnSize;
 			}
 		}
 		return *m_data_exchange;
@@ -361,7 +542,7 @@ private:
 		m_col_info = nullptr;
 		m_data_exchange = nullptr;
 		m_axis = nullptr;
-		m_boundaries.clear();
+		m_member_defs.clear();
 	}
 };
 

@@ -23,6 +23,7 @@
 #include "stdafx.h"
 #include "config_data.h"
 
+bool config_data::m_visual_totals = true;
 bool config_data::m_skip_ssl_host_check = false;
 std::wstring config_data::m_location = TEXT("");
 bool config_data::m_use_proxy = false;

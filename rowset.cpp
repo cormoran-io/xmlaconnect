@@ -25,10 +25,20 @@
 #include "data_source.h"
 #include "XMLAMamespaces.nsmap"
 
+//#define ARQUERY_SERVER
+
+//Excel 2010 reads the subqueries property before setting the location 
+//so there is no way to query it from the server
+#ifdef	ARQUERY_SERVER
+__declspec( thread ) bool data_source::thread_has_subqueries = true;
+#else
+__declspec( thread ) bool data_source::thread_has_subqueries = false;
+#endif
+
 
 ATL::ATLCOLUMNINFO* row_data::GetColumnInfo( void* pv, DBORDINAL* pcInfo )
 {
-	return (static_cast<rowset*>(pv))->mConnectionHandler->column_info( pcInfo );
+	return (static_cast<rowset*>(pv))->m_connection_handler->column_info( pcInfo );
 }
 
 
@@ -39,13 +49,13 @@ HRESULT rowset::Execute(DBPARAMS * /*pParams*/, DBROWCOUNT* pcRowsAffected)
 	
 	if FAILED( hr ) return hr;
 
-	pIExtCommand->GetConnectionHandler( (void**)&mConnectionHandler );
+	pIExtCommand->GetConnectionHandler( (void**)&m_connection_handler );
 
 	pIExtCommand->Release();
 
-	if ( (NULL != pcRowsAffected) && (NULL != mConnectionHandler) )
+	if ( (NULL != pcRowsAffected) && (nullptr != m_connection_handler) )
 	{
-		*pcRowsAffected = mConnectionHandler->row_count();
+		*pcRowsAffected = m_connection_handler->row_count();
 	}
 
 	return S_OK;
@@ -79,7 +89,7 @@ STDMETHODIMP rowset::GetCellData(
 			{
 				if ( DBTYPE_VARIANT == bind->pBindings[i].wType )
 				{
-					if ( mConnectionHandler->is_cell_ordinal( bind->pBindings[i].iOrdinal ) )
+					if ( m_connection_handler->is_cell_ordinal( bind->pBindings[i].iOrdinal ) )
 					{
 						VARIANT cell_data;
 						cell_data.vt = VT_UI4;
@@ -90,7 +100,7 @@ STDMETHODIMP rowset::GetCellData(
 					{
 						try
 						{
-							VARIANT cell_data = mConnectionHandler->at( crtCell, bind->pBindings[i].iOrdinal );
+							VARIANT cell_data = m_connection_handler->at( crtCell, bind->pBindings[i].iOrdinal );
 							*(( VARIANT* )((( char* ) pData ) + bind->pBindings[i].obValue + rowSize*(crtCell - ulStartCell) ) ) = cell_data;
 							status = DBSTATUS_S_OK;
 						}
@@ -123,13 +133,13 @@ STDMETHODIMP rowset::GetCellData(
 
 STDMETHODIMP rowset::GetAxisInfo( DBCOUNTITEM   *pcAxes, MDAXISINFO   **prgAxisInfo )
 {
-	mConnectionHandler->get_axis_info( pcAxes, prgAxisInfo );
+	m_connection_handler->get_axis_info( pcAxes, prgAxisInfo );
 	return S_OK;
 }
 
 STDMETHODIMP rowset::FreeAxisInfo( DBCOUNTITEM cAxes, MDAXISINFO *rgAxisInfo ) 
 {
-	mConnectionHandler->free_axis_info( cAxes, rgAxisInfo );
+	m_connection_handler->free_axis_info( cAxes, rgAxisInfo );
 	return S_OK;
 }
 

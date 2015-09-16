@@ -722,29 +722,29 @@ public:
 			return S_OK;
 		}
 
-		connection_handler handler( m_spUnkSite );
+		connection_handler* handler = session::connection_handler( m_spUnkSite );
 
-		int result = handler.discover( Storage::schema_name(), cRestrictions, rgRestrictions);
-		if ( handler.no_session() ) {
-			result = handler.discover( Storage::schema_name(), cRestrictions, rgRestrictions);
+		int result = handler->discover( Storage::schema_name(), cRestrictions, rgRestrictions);
+		if ( handler->no_session() ) {
+			result = handler->discover( Storage::schema_name(), cRestrictions, rgRestrictions);
 		}
 		if ( S_OK != result ) {
-			make_error( FROM_STRING( handler.fault_string(), CP_UTF8 ) );
+			make_error( FROM_STRING( handler->fault_string(), CP_UTF8 ) );
 			return E_FAIL;
 		}
 
-		for ( int i = 0, e = handler.discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {			
+		for ( int i = 0, e = handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {			
 			if ( 0 == strcmp( "MDSCHEMA_LEVELS", Storage::schema_name() ) ) {
-				if ( 0 == strcmp( "[Measures]", handler.discover_response().cxmla__return__.root.__rows.row[i].DIMENSION_USCOREUNIQUE_USCORENAME ) )
+				if ( 0 == strcmp( "[Measures]", handler->discover_response().cxmla__return__.root.__rows.row[i].DIMENSION_USCOREUNIQUE_USCORENAME ) )
 				{
 					//Somehow we will crash under excel without this hack.
 					row dummy_level;
-					dummy_level.CATALOG_USCORENAME = handler.discover_response().cxmla__return__.root.__rows.row[i].CATALOG_USCORENAME;
-					dummy_level.CUBE_USCORENAME = handler.discover_response().cxmla__return__.root.__rows.row[i].CUBE_USCORENAME;
-					dummy_level.DIMENSION_USCOREUNIQUE_USCORENAME = handler.discover_response().cxmla__return__.root.__rows.row[i].DIMENSION_USCOREUNIQUE_USCORENAME;
-					dummy_level.HIERARCHY_USCOREUNIQUE_USCORENAME = handler.discover_response().cxmla__return__.root.__rows.row[i].HIERARCHY_USCOREUNIQUE_USCORENAME;
-					dummy_level.LEVEL_USCORECARDINALITY = handler.discover_response().cxmla__return__.root.__rows.row[i].LEVEL_USCORECARDINALITY;
-					dummy_level.LEVEL_USCORETYPE = handler.discover_response().cxmla__return__.root.__rows.row[i].LEVEL_USCORETYPE;
+					dummy_level.CATALOG_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CATALOG_USCORENAME;
+					dummy_level.CUBE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CUBE_USCORENAME;
+					dummy_level.DIMENSION_USCOREUNIQUE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].DIMENSION_USCOREUNIQUE_USCORENAME;
+					dummy_level.HIERARCHY_USCOREUNIQUE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].HIERARCHY_USCOREUNIQUE_USCORENAME;
+					dummy_level.LEVEL_USCORECARDINALITY = handler->discover_response().cxmla__return__.root.__rows.row[i].LEVEL_USCORECARDINALITY;
+					dummy_level.LEVEL_USCORETYPE = handler->discover_response().cxmla__return__.root.__rows.row[i].LEVEL_USCORETYPE;
 					dummy_level.LEVEL_USCORENAME = "Level00";
 					dummy_level.LEVEL_USCOREUNIQUE_USCORENAME = "[Measures].[Level00]";
 					dummy_level.LEVEL_USCORECAPTION = "Level00";
@@ -753,7 +753,7 @@ public:
 					m_rgRowData.Add( Storage( dummy_level ) );
 				}
 			}
-			m_rgRowData.Add( Storage( handler.discover_response().cxmla__return__.root.__rows.row[i] ) );
+			m_rgRowData.Add( Storage( handler->discover_response().cxmla__return__.root.__rows.row[i] ) );
 		}
 
 

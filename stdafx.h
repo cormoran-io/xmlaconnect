@@ -93,7 +93,7 @@ inline int get_int( const char* from ) {
 	return from ? atoi(from) : -1;
 }
 
-#define FROM_STRING( x, y ) (x) ? CA2W( (x), y ) : L""
+#define FROM_STRING( x, y ) (x) ? ATL::CA2W( (x), y ) : L""
 #define EMPTY_CONSTRUCTOR(class_name) class_name##(){}
 
 void make_error( LPOLESTR  aDescription  );
@@ -110,3 +110,7 @@ inline void wcscpy_s( wchar_t* dst, size_t dst_len, wchar_t* src )
 	memcpy( dst, src, len_to_copy*sizeof(wchar_t));
 	*(dst+len_to_copy)=0;
 }
+
+#define BEGIN_PROPERTY_SET_COND(test,group) if ( test ) { BEGIN_PROPERTY_SET(group)
+#define	ELSE_PROPERTY_SET_COND(group) END_PROPERTY_SET(group) } else { BEGIN_PROPERTY_SET(group)
+#define	END_PROPERTY_SET_COND(group) END_PROPERTY_SET(group) }
