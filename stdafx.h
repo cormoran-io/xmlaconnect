@@ -99,6 +99,7 @@ inline int get_int( const char* from ) {
 void make_error( LPOLESTR  aDescription  );
 
 static const int STR_LEN = 256;
+static const int WORD_WIDTH = 256;
 
 #define PROVIDER_COLUMN_ENTRY_VAR_WSTR(name, ordinal, size, member) \
 	PROVIDER_COLUMN_ENTRY_EX(name, NULL, ordinal, DBCOLUMNFLAGS_MAYBENULL, size, DBTYPE_WSTR + DBTYPE_BYREF, 0, 0, GUID_NULL, member )

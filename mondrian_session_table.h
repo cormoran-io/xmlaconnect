@@ -22,7 +22,6 @@
 */
 
 #pragma once
-
 #include <cctype>
 #include <algorithm>
 #include <string>

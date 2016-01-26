@@ -40,12 +40,12 @@ public:
 	
 		if FAILED( hr ) return hr;
 
-		connection_handler* connectionHandler;
+		execute_response* response;
 
-		pIExtCommand->GetConnectionHandler(  (void**)&( connectionHandler ) );
+		pIExtCommand->GetDataHolder(  (void**)&( response ) );
 
-		if ( NULL != connectionHandler ) {
-			m_rgRowData.setup_data( *pcRowsAffected, connectionHandler );
+		if ( nullptr != response ) {
+			m_rgRowData.setup_data( *pcRowsAffected, response->access_md_data(), response->should_fix_aliases() );
 		}
 
 		pIExtCommand->Release();

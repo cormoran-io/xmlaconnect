@@ -38,24 +38,27 @@ __declspec( thread ) bool data_source::thread_has_subqueries = false;
 
 ATL::ATLCOLUMNINFO* row_data::GetColumnInfo( void* pv, DBORDINAL* pcInfo )
 {
-	return (static_cast<rowset*>(pv))->m_connection_handler->column_info( pcInfo );
+	return (static_cast<rowset*>(pv))->m_md_data_access->column_info( pcInfo );
 }
-
 
 HRESULT rowset::Execute(DBPARAMS * /*pParams*/, DBROWCOUNT* pcRowsAffected)
 {
+	execute_response* data_holder;
 	IExtendCommand* pIExtCommand = NULL;
 	HRESULT hr = m_spUnkSite->QueryInterface( __uuidof( IExtendCommand ), ( void**) &pIExtCommand );
 	
-	if FAILED( hr ) return hr;
+	if FAILED( hr ) { return hr; }
 
-	pIExtCommand->GetConnectionHandler( (void**)&m_connection_handler );
-
+	pIExtCommand->GetDataHolder( (void**)&data_holder );
 	pIExtCommand->Release();
 
-	if ( (NULL != pcRowsAffected) && (nullptr != m_connection_handler) )
+	if ( nullptr == data_holder ) { return E_FAIL; }
+
+	m_md_data_access = &( data_holder->access_md_data() );
+
+	if ( nullptr != pcRowsAffected )
 	{
-		*pcRowsAffected = m_connection_handler->row_count();
+		*pcRowsAffected = m_md_data_access->row_count();
 	}
 
 	return S_OK;
@@ -89,7 +92,7 @@ STDMETHODIMP rowset::GetCellData(
 			{
 				if ( DBTYPE_VARIANT == bind->pBindings[i].wType )
 				{
-					if ( m_connection_handler->is_cell_ordinal( bind->pBindings[i].iOrdinal ) )
+					if ( m_md_data_access->is_cell_ordinal( bind->pBindings[i].iOrdinal ) )
 					{
 						VARIANT cell_data;
 						cell_data.vt = VT_UI4;
@@ -100,7 +103,7 @@ STDMETHODIMP rowset::GetCellData(
 					{
 						try
 						{
-							VARIANT cell_data = m_connection_handler->at( crtCell, bind->pBindings[i].iOrdinal );
+							VARIANT cell_data = m_md_data_access->at( crtCell, bind->pBindings[i].iOrdinal );
 							*(( VARIANT* )((( char* ) pData ) + bind->pBindings[i].obValue + rowSize*(crtCell - ulStartCell) ) ) = cell_data;
 							status = DBSTATUS_S_OK;
 						}
@@ -133,13 +136,13 @@ STDMETHODIMP rowset::GetCellData(
 
 STDMETHODIMP rowset::GetAxisInfo( DBCOUNTITEM   *pcAxes, MDAXISINFO   **prgAxisInfo )
 {
-	m_connection_handler->get_axis_info( pcAxes, prgAxisInfo );
+	m_md_data_access->get_axis_info( pcAxes, prgAxisInfo );
 	return S_OK;
 }
 
 STDMETHODIMP rowset::FreeAxisInfo( DBCOUNTITEM cAxes, MDAXISINFO *rgAxisInfo ) 
 {
-	m_connection_handler->free_axis_info( cAxes, rgAxisInfo );
+	m_md_data_access->free_axis_info( cAxes, rgAxisInfo );
 	return S_OK;
 }
 

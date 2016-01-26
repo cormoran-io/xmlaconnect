@@ -1,23 +1,6 @@
-Changes 16-Sep-2015
-
-1. Data compression support. Implemented with zlib. You need to download zlib from here: http://www.zlib.net/. The solution expects zlib to be on the same level with gsoap. The current build layout is shown below:
-
-\
-|
-----XMLA Code
-|
-----zlib
-|	--include
-|	--lib
-|     --Windows
-|		--i386
-|			--static
-|		--x86_64
-|			--static
-
 Changes 1-Jan-2015
 
-1. Proxy autoconfiguration script support. Implemented with ATLHTTP. You need to download it from here: http://atlserver.codeplex.com/ . The solution expects atlhttp to be on the same level with gsoap. The current build layout is shown below:
+1. Proxy autoconfiguration script support. Implemented with ATLHTTP. You need to download it from here: http://atlserver.codeplex.com/ . The solution expects atlhttp to be on the same level with gsoap. The current build layout is shown belw:
 
 \
 |

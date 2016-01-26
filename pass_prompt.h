@@ -51,7 +51,7 @@ END_MSG_MAP()
 		bHandled = TRUE;
 		SetDlgItemText(IDC_EDIT_USER_L, m_user );
 		SetDlgItemText(IDC_EDIT_PASS_L, m_pass );
-		GotoDlgCtrl(GetDlgItem(IDC_EDIT_PASS_L)); 
+		GotoDlgCtrl(GetDlgItem( 0 == m_user[0] ? IDC_EDIT_USER_L : IDC_EDIT_PASS_L)); 
 		return 0;  // Manual focus selection
 	}
 

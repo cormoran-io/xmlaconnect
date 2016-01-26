@@ -20,6 +20,8 @@
 					maintains session members/sets for mondrian while 
 					we are waiting for CREATE statement
 */
+
+
 #include "stdafx.h"
 #include "mondrian_session_table.h"
 #include "rowset.h"
@@ -38,7 +40,7 @@ bool mondrian_session_table::entry::develop_to_set( connection_handler& handler 
 		
 	cxmla__DiscoverResponse&  response = handler.raw_discover( "MDSCHEMA_CUBES", restrictions, properties );
 
-	if ( 1 != response.cxmla__return__.root.__rows.__size ) { return false; }
+	if ( 1 > response.cxmla__return__.root.__rows.__size ) { return false; }
 
 	m_set_row.reset( new set_row() );
 
@@ -82,7 +84,7 @@ bool mondrian_session_table::entry::develop_to_measure( connection_handler& hand
 		
 	cxmla__DiscoverResponse&  response = handler.raw_discover( "MDSCHEMA_HIERARCHIES", restrictions, properties );
 
-	if ( 1 != response.cxmla__return__.root.__rows.__size ) { return false; }
+	if ( 1 > response.cxmla__return__.root.__rows.__size ) { return false; }
 
 	type = MEASURE_TYPE;
 
@@ -124,7 +126,7 @@ bool mondrian_session_table::entry::develop_to_member( connection_handler& handl
 		
 	cxmla__DiscoverResponse&  response = handler.raw_discover( "MDSCHEMA_MEMBERS", restrictions, properties );
 
-	if ( 1 != response.cxmla__return__.root.__rows.__size ) { return false; }
+	if ( 1 > response.cxmla__return__.root.__rows.__size ) { return false; }
 
 	m_member_row.reset( new member_row() );
 	row crt_row = response.cxmla__return__.root.__rows.row[0];

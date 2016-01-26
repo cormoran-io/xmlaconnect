@@ -733,11 +733,11 @@ public:
 			return E_FAIL;
 		}
 
+		bool added = false;
 		for ( int i = 0, e = handler->discover_response().cxmla__return__.root.__rows.__size; i < e; ++i ) {			
 			if ( 0 == strcmp( "MDSCHEMA_LEVELS", Storage::schema_name() ) ) {
 				if ( 0 == strcmp( "[Measures]", handler->discover_response().cxmla__return__.root.__rows.row[i].DIMENSION_USCOREUNIQUE_USCORENAME ) )
-				{
-					//Somehow we will crash under excel without this hack.
+				{//Somehow we will crash under excel without this hack.
 					row dummy_level;
 					dummy_level.CATALOG_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CATALOG_USCORENAME;
 					dummy_level.CUBE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CUBE_USCORENAME;
@@ -751,8 +751,32 @@ public:
 					dummy_level.LEVEL_USCORENUMBER = "-1";
 					dummy_level.DESCRIPTION = "Level00";
 					m_rgRowData.Add( Storage( dummy_level ) );
-				}
-			}
+				}/* else if ( !added &&  0 == strcmp( handler->discover_response().cxmla__return__.root.__rows.row[i].DIMENSION_USCOREUNIQUE_USCORENAME, "[Date]" )) {
+					row dummy_level0;
+					dummy_level0.CATALOG_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CATALOG_USCORENAME;
+					dummy_level0.CUBE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CUBE_USCORENAME;
+					dummy_level0.DIMENSION_USCOREUNIQUE_USCORENAME = "[Date]";
+					dummy_level0.HIERARCHY_USCOREUNIQUE_USCORENAME = "[Date].[the_date]";
+					dummy_level0.LEVEL_USCORENAME = "All";
+					m_rgRowData.Add( Storage( dummy_level0 ) );
+					row dummy_level;
+					dummy_level.CATALOG_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CATALOG_USCORENAME;
+					dummy_level.CUBE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CUBE_USCORENAME;
+					dummy_level.DIMENSION_USCOREUNIQUE_USCORENAME = "[Date]";
+					dummy_level.HIERARCHY_USCOREUNIQUE_USCORENAME = "[Date].[the_date]";
+					dummy_level.LEVEL_USCORENAME = "date";
+					m_rgRowData.Add( Storage( dummy_level ) );
+					added = true;
+				} */
+			}/* else if ( 0 == strcmp( "MDSCHEMA_HIERARCHIES", Storage::schema_name() ) && !added) {
+					row dummy_level;
+					dummy_level.CATALOG_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CATALOG_USCORENAME;
+					dummy_level.CUBE_USCORENAME = handler->discover_response().cxmla__return__.root.__rows.row[i].CUBE_USCORENAME;
+					dummy_level.DIMENSION_USCOREUNIQUE_USCORENAME = "[Date]";
+					dummy_level.HIERARCHY_USCORENAME = "the_date";
+					m_rgRowData.Add( Storage( dummy_level ) );
+					added = true;
+			}*/
 			m_rgRowData.Add( Storage( handler->discover_response().cxmla__return__.root.__rows.row[i] ) );
 		}
 

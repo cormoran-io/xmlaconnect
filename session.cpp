@@ -136,7 +136,11 @@ HRESULT session::init_connection_handler()
 
 	m_connection_handler.reset( new ::connection_handler( location, user, pass, catalog) );
 
-	if ( m_connection_handler->check_login( parent_window_handle ) ) { return S_OK; } 
+	if ( m_connection_handler->check_login( parent_window_handle ) ) 
+	{ 
+		m_connection_handler->detect_server();
+		return S_OK; 
+	} 
 	else { return E_FAIL; }
 
 	return S_OK;

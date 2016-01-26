@@ -79,7 +79,7 @@ library XMLAProviderLib
 #else
 		HRESULT GetAxisRowset(IUnknown * pUnkOuter, REFIID riid, void * pParams, LONG  * pcRowsAffected, IUnknown ** ppRowset);
 #endif
-		HRESULT GetConnectionHandler( void** connection );
+		HRESULT GetDataHolder( void** connection );
 	};
 };
 

@@ -75,19 +75,17 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>false</LinkIncremental>
-    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>false</LinkIncremental>
-    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WITH_COOKIES;WITH_GZIP;WITH_OPENSSL;WIN32;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>ARQUERY_SERVER;WITH_COOKIES;WITH_GZIP;WITH_OPENSSL;WIN32;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\zlib\include;..\gsoap\gsoap\;..\openssl\include\;..\atl_server\include\</AdditionalIncludeDirectories>
     </ClCompile>
     <Midl>
@@ -298,14 +296,17 @@
     <ClInclude Include="catalog_row.h" />
     <ClInclude Include="command.h" />
     <ClInclude Include="config_data.h" />
+    <ClInclude Include="cross_join_reducer.h" />
     <ClInclude Include="cube_row.h" />
     <ClInclude Include="axis_row.h" />
     <ClInclude Include="dbproperties_impl.h" />
     <ClInclude Include="dimension_row.h" />
     <ClInclude Include="dllmain.h" />
+    <ClInclude Include="execute_response.h" />
     <ClInclude Include="function_row.h" />
     <ClInclude Include="hierarchy_row.h" />
     <ClInclude Include="level_row.h" />
+    <ClInclude Include="measuregroup_row.h" />
     <ClInclude Include="measure_row.h" />
     <ClInclude Include="member_row.h" />
     <ClInclude Include="pac_interpreter.h" />
@@ -315,6 +316,7 @@
     <ClInclude Include="row_data.h" />
     <ClInclude Include="query_translator.h" />
     <ClInclude Include="mondrian_session_table.h" />
+    <ClInclude Include="schema_rowset.h" />
     <ClInclude Include="set_row.h" />
     <ClInclude Include="connection_handler.h" />
     <ClInclude Include="soapH.h" />
@@ -334,7 +336,6 @@
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">soapXMLAConnectionProxy.h soapXMLAConnectionProxy.cpp</Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">soapXMLAConnectionProxy.h soapXMLAConnectionProxy.cpp</Outputs>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </CustomBuild>
     <ClInclude Include="version_info.h" />

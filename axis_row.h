@@ -60,12 +60,12 @@ public:
 	}
 	
 
-	void setup_data( DBCOUNTITEM idx, connection_handler* handler ) {
+	void setup_data( DBCOUNTITEM idx, execute_response::md_data_access& data, bool should_fix_aliases ) {
 
 		clear();
-		m_should_fix_aliases = handler->should_fix_aliases();
+		m_should_fix_aliases = should_fix_aliases;
 
-		handler->get_axis( idx, m_axis, m_axis_info );
+		data.get_axis( idx, m_axis, m_axis_info );
 		
 		m_col_info_cnt = 1;//TUPLE_ORDINAL;
 		for ( unsigned int i = 0, e = m_axis_info->__size; i < e; ++i ) {
@@ -84,16 +84,9 @@ public:
 				m_member_defs[i].has_member_type = true;
 				++m_col_info_cnt;
 			}
-		//	m_col_info_cnt += hInfo.__userProp.__size;
+
 			for ( int j = 0; j < hInfo.__userProp.__size; ++j )
 			{
-/*
-				if ( handler->m_sesion_data.mondrian() ) {
-					if ( !query_translator::translator().isProp( hInfo.__userProp.__array[j].name,  handler->m_sesion_data.server ) ) {
-						continue;
-					}
-				}
-*/
 				m_member_defs[i].custom_props.push_back( hInfo.__userProp.__array[j].elementName ) ;
 				++m_col_info_cnt;
 			}
@@ -227,13 +220,6 @@ public:
 			}
 
 			for ( unsigned int j = 0, je = hInfo.__userProp.__size; j < je; ++j ) {
-/*
-				if ( handler->m_sesion_data.mondrian() ) {
-					if ( !query_translator::translator().isProp( hInfo.__userProp.__array[j].name,  handler->m_sesion_data.server ) ) {
-						continue;
-					}
-				}
-*/
 				m_col_info[crtColInfo].pwszName = _wcsdup( CA2W( hInfo.__userProp.__array[j].elementName, CP_UTF8 ) );
 				m_col_info[crtColInfo].pTypeInfo = (ITypeInfo*)nullptr;
 				m_col_info[crtColInfo].iOrdinal = crtColInfo+1;
@@ -296,7 +282,16 @@ public:
 			std::string hier_uname = std::string("[") + hier_candidate + "]";
 			std::string u_name(crtTuple.Member[ i ].UName);
 
-			if ( u_name.substr(0, hier_uname.length() ) == hier_uname )
+			//mondrian 4 is fully XMLA compliant. should skip this entirely;
+			std::size_t first_pos = u_name.find("].[");
+			bool is_xmla_comp = false;
+			if ( std::string::npos != first_pos )
+			{
+				is_xmla_comp = u_name.substr( first_pos + 2, hier_uname.length() ) == hier_uname;
+			}
+
+
+			if ( is_xmla_comp || u_name.substr(0, hier_uname.length() ) == hier_uname )
 			{
 				//UName
 				wcscpy_s(  ( wchar_t* )( m_data_exchange + offset ), m_col_info[idx].ulColumnSize / 2, CA2W( crtTuple.Member[ i ].UName, CP_UTF8 ) );

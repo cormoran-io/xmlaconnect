@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include "execute_response.h"
+
 using namespace ATL;
 
 class connection_handler;
@@ -53,7 +55,7 @@ BEGIN_COM_MAP(command)
 	COM_INTERFACE_ENTRY(ISupportErrorInfo)
 END_COM_MAP()
 private:
-	connection_handler* m_connection_handler;
+	execute_response m_execute_response;
 public:
 	HRESULT FinalConstruct()
 	{
@@ -79,7 +81,7 @@ public:
 
 //IExtendCommand
 	STDMETHOD ( GetAxisRowset ) (IUnknown * pUnkOuter, REFIID riid, void * pParams, DBROWCOUNT * pcRowsAffected, IUnknown ** ppRowset);
-	STDMETHOD ( GetConnectionHandler )( void** connection );
+	STDMETHOD ( GetDataHolder )( void** connection );
 
 //ISupportErrorInfo
 	HRESULT STDMETHODCALLTYPE InterfaceSupportsErrorInfo (REFIID riid)

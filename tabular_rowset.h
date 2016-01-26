@@ -89,7 +89,7 @@ public:
 class tabular_rowset:  public CRowsetImpl< tabular_rowset, tabular_row_data, command>
 {
 	friend class tabular_row_data;
-	connection_handler* m_connection_handler;
+	execute_response* m_execute_response;
 public:
 	HRESULT Execute(DBPARAMS * /*pParams*/, DBROWCOUNT* pcRowsAffected);
 };

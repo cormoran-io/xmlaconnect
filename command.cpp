@@ -27,21 +27,19 @@
 #include "connection_handler.h"
 #include "axis_rowset.h"
 
-int (*connection_handler::fparsehdr)(struct soap*, const char*, const char*) = nullptr;
-
 STDMETHODIMP command::Execute(IUnknown * pUnkOuter, REFIID riid, DBPARAMS * pParams, DBROWCOUNT * pcRowsAffected, IUnknown ** ppRowset)
 {
 	IUnknown* pSessUnk = NULL;
 	GetSite( __uuidof( IUnknown ), ( void** ) &pSessUnk );
 
-	m_connection_handler = session::connection_handler( pSessUnk );
+	connection_handler* connection_handler = session::connection_handler( pSessUnk );
 	pSessUnk->Release();
-	int result = m_connection_handler->execute( CW2A( m_strCommandText.m_str, CP_UTF8 ) );
-	if ( m_connection_handler->no_session() ) {
-		result = m_connection_handler->execute( CW2A( m_strCommandText.m_str, CP_UTF8 ) );
+	int result = connection_handler->execute( CW2A( m_strCommandText.m_str, CP_UTF8 ), m_execute_response );
+	if ( connection_handler->no_session() ) {
+		result = connection_handler->execute( CW2A( m_strCommandText.m_str, CP_UTF8 ), m_execute_response );
 	}
 	if ( S_OK != result ) {
-		make_error( FROM_STRING( m_connection_handler->fault_string(), CP_UTF8 ) );
+		make_error( FROM_STRING( connection_handler->fault_string(), CP_UTF8 ) );
 		return E_FAIL;
 	}
 
@@ -78,7 +76,7 @@ STDMETHODIMP command::Execute(IUnknown * pUnkOuter, REFIID riid, DBPARAMS * pPar
 		IUnknown* dummy;
 		HRESULT hr;
 		
-		if ( m_connection_handler->has_tabular_data() )
+		if ( m_execute_response.has_tabular_data() )
 		{
 			tabular_rowset*		pRowset;
 			hr = CreateRowset(pUnkOuter, riid, pParams, pcRowsAffected, &dummy, pRowset);
@@ -94,7 +92,7 @@ STDMETHODIMP command::Execute(IUnknown * pUnkOuter, REFIID riid, DBPARAMS * pPar
 		return hr;
 	}
 
-	if ( m_connection_handler->has_tabular_data() )
+	if ( m_execute_response.has_tabular_data() )
 	{
 		tabular_rowset*		pRowset;
 		return CreateRowset(pUnkOuter, riid, pParams, pcRowsAffected, ppRowset, pRowset);
@@ -111,8 +109,8 @@ STDMETHODIMP command::GetAxisRowset(IUnknown * pUnkOuter, REFIID riid, void * pP
 	return CreateRowset(pUnkOuter, riid, ( DBPARAMS* ) pParams, pcRowsAffected, ppRowset, pRowset);
 }
 
-STDMETHODIMP command::GetConnectionHandler( void** connection )
+STDMETHODIMP command::GetDataHolder( void** connection )
 {
-	*connection = m_connection_handler;
+	*connection = &m_execute_response;
 	return S_OK;
 }

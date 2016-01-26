@@ -29,7 +29,7 @@
 
 ATLCOLUMNINFO* tabular_row_data::GetColumnInfo(void* pThis, DBORDINAL* pcCols)
 {
-	return static_cast< tabular_rowset* >( pThis )->m_connection_handler->access_tab_data().GetColumnInfo( pcCols );
+	return static_cast< tabular_rowset* >( pThis )->m_execute_response->access_tab_data().GetColumnInfo( pcCols );
 }
 
 HRESULT tabular_rowset::Execute(DBPARAMS * /*pParams*/, DBROWCOUNT* pcRowsAffected)
@@ -39,14 +39,17 @@ HRESULT tabular_rowset::Execute(DBPARAMS * /*pParams*/, DBROWCOUNT* pcRowsAffect
 	
 	if FAILED( hr ) return hr;
 
-	pIExtCommand->GetConnectionHandler( (void**)&m_connection_handler );
-
+	pIExtCommand->GetDataHolder( (void**)&m_execute_response );
 	pIExtCommand->Release();
 
-	const int row_count = m_connection_handler->access_tab_data().row_count();
-	const int data_size = m_connection_handler->access_tab_data().data_size();
+	if (nullptr == m_execute_response) { return E_FAIL; }
+	execute_response::tabular_data_access& tab_data = m_execute_response->access_tab_data();
+	const int row_count = tab_data.row_count();;
+	const int data_size = tab_data.data_size();
 
-	if ( (NULL != pcRowsAffected) && (nullptr != m_connection_handler) )
+
+
+	if ( (NULL != pcRowsAffected) )
 	{
 		*pcRowsAffected = row_count-1;
 	}
@@ -54,7 +57,7 @@ HRESULT tabular_rowset::Execute(DBPARAMS * /*pParams*/, DBROWCOUNT* pcRowsAffect
 	for ( int i = 1; i < row_count; ++i )
 	{
 		tabular_row_data crt(data_size);
-		m_connection_handler->access_tab_data().load_at( i, (wchar_t*)&crt );
+		tab_data.load_at( i, (wchar_t*)&crt );
 		m_rgRowData.Add( crt );
 	}
 

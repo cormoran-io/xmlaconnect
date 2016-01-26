@@ -210,6 +210,15 @@
     <ClInclude Include="mondrian_session_table.h">
       <Filter>Header Files\compatibility</Filter>
     </ClInclude>
+    <ClInclude Include="cross_join_reducer.h">
+      <Filter>Header Files\compatibility</Filter>
+    </ClInclude>
+    <ClInclude Include="measuregroup_row.h">
+      <Filter>Header Files\schema</Filter>
+    </ClInclude>
+    <ClInclude Include="execute_response.h">
+      <Filter>Header Files\data_link</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XMLAProvider.rc">

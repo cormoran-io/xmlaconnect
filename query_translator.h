@@ -129,19 +129,26 @@ private:
 			//delimited aliases
 			for( delimited_alias_type::const_iterator i = d_alias.begin(), e = d_alias.end(); i != e; ++i ) 
 			{
-				size_t start_pos = what.find(i->m_from);
-				size_t key_pos = what.find(i->m_key, start_pos );
-				size_t end_pos = what.find(i->m_to, start_pos);
-				while ( std::string::npos != key_pos && std::string::npos != start_pos && std::string::npos != end_pos && key_pos < end_pos && key_pos > start_pos ) {
-					while ( key_pos < end_pos ) {
-						what.replace(key_pos, i->m_key.length(), i->m_val );
-						key_pos = what.find(i->m_key, key_pos + i->m_val.size() + 1 );
-					}
-					start_pos = what.find(i->m_from, start_pos+1 );
-					key_pos = what.find(i->m_key, start_pos );
-					end_pos = what.find(i->m_to, start_pos+1);
-				}
+				const size_t from_len = i->m_from.length();
+				const size_t val_len = i->m_val.length();
+				size_t offset = -1;
 
+				while ( true )
+				{
+					size_t start_pos = what.find(i->m_from, offset + 1);
+					size_t end_pos = what.find(i->m_to, start_pos);
+
+					if ( std::string::npos == start_pos || std::string::npos == end_pos ) { break; }
+
+					size_t key_pos = what.find(i->m_key, start_pos + from_len);
+					while ( std::string::npos != key_pos && key_pos < end_pos )
+					{
+						what.replace(key_pos, i->m_key.length(), i->m_val );
+						end_pos = what.find(i->m_to, start_pos);
+						key_pos = what.find(i->m_key, key_pos + val_len + 1 );
+					}
+					offset = start_pos;
+				}
 			}
 			return what;
 		}

@@ -27,6 +27,9 @@
 
 //from msmd.h
 #define DBPROP_VISUALMODE				(DBPROP_SESS_AUTOCOMMITISOLEVELS  + 1)
+//extern const OLEDBDECLSPEC GUID MDSCHEMA_MEASUREGROUPS					= {0xe1625ebf,0xfa96,0x42fd,{0xbe,0xa6,0xdb,0x90,0xad,0xaf,0xd9,0x6b}};
+
+
 
 class catalog_rowset;
 class cube_rowset;
@@ -36,10 +39,12 @@ class hierarchy_rowset;
 class level_rowset;
 class member_rowset;
 class measure_rowset;
+//class measuregroup_rowset;
 class property_rowset;
 class set_rowset;
-
-
+class schema_rowset;
+										
+const GUID DISCOVER_SCHEMA_ROWSETS = {0xeea0302b,0x7922,0x4992,{0x89,0x91,0x0e,0x60,0x5d,0x0e,0x55,0x93}};
 
 using namespace ATL;
 
@@ -75,8 +80,9 @@ public:
 		void register_server( const char* server_data )
 		{
 			if ( server !=  UNDEFINED  ) { return; }
-			if ( str_match( server_data, "Apache" ) ) { server = MONDRIAN; return; }
-			if ( str_match( server_data, "gSOAP" ) ) { server = ORACLE; return; }
+			if ( str_match( server_data, "Mondrian" ) ) { server = MONDRIAN; return; }
+			if ( str_match( server_data, "PentahoXMLA" ) ) { server = MONDRIAN; return; }
+			if ( str_match( server_data, "Arquery" ) ) { server = ORACLE; return; }
 			if ( str_match( server_data, "Palo" ) ) { server = JEDOX; return; }
 		}
 
@@ -193,6 +199,10 @@ BEGIN_COM_MAP(session)
 	COM_INTERFACE_ENTRY(IGetSelf)
 END_COM_MAP()
 
+
+
+
+
 BEGIN_SCHEMA_MAP(session)
 	SCHEMA_ENTRY( DBSCHEMA_CATALOGS , catalog_rowset )
 	SCHEMA_ENTRY( MDSCHEMA_CUBES , cube_rowset )
@@ -202,8 +212,11 @@ BEGIN_SCHEMA_MAP(session)
 	SCHEMA_ENTRY( MDSCHEMA_LEVELS, level_rowset )
 	SCHEMA_ENTRY( MDSCHEMA_MEMBERS, member_rowset )
 	SCHEMA_ENTRY( MDSCHEMA_MEASURES, measure_rowset )
+//	SCHEMA_ENTRY( MDSCHEMA_MEASUREGROUPS, measuregroup_rowset )
 	SCHEMA_ENTRY( MDSCHEMA_PROPERTIES, property_rowset )
 	SCHEMA_ENTRY( MDSCHEMA_SETS, set_rowset )
+//	SCHEMA_ENTRY( DISCOVER_SCHEMA_ROWSETS, schema_rowset )
+	
 END_SCHEMA_MAP()
 
 };
@@ -215,11 +228,15 @@ END_SCHEMA_MAP()
 #include "hierarchy_row.h"
 #include "level_row.h"
 #include "measure_row.h"
+//#include "measuregroup_row.h"
 #include "member_row.h"
 #include "property_row.h"
 #include "set_row.h"
 #include "base_rowset.h"
+#include "schema_rowset.h"
 
+
+class schema_rowset : public base_rowset< schema_rowset, schema_row, session >{};
 class catalog_rowset : public base_rowset< catalog_rowset, catalog_row, session >{};
 class cube_rowset : public base_rowset< cube_rowset, cube_row, session >{};
 class dimension_rowset : public base_rowset< dimension_rowset, dimension_row, session >{};
@@ -311,6 +328,7 @@ public:
 	}
 };
 class property_rowset : public base_rowset< property_rowset, property_row, session >{};
+//class measuregroup_rowset : public base_rowset< measuregroup_rowset, measuregroup_row, session >{};
 class set_rowset : public base_rowset< set_rowset, set_row, session >
 {
 public:
